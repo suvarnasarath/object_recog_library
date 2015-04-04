@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(object_recog)
+project(object_recog_library)
 
 SET(CMAKE_CXX_FLAGS "-std=c++0x")
 

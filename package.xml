@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>object_recog</name>
+  <name>object_recog_library</name>
   <version>0.0.0</version>
   <description>The object_recog package</description>
 
