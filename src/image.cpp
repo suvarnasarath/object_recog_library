@@ -1,11 +1,4 @@
-#include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <iostream>
-#include <vector>
-
-using namespace cv;
-using namespace std;
+#include "detection.h"
 
 // Globals
 RNG rng(12345);
@@ -94,7 +87,7 @@ bool process_image(cv::Mat image_hsv, int index)
      }
    
     // Print the number of samples found
-     cout << "Number of samples found: "<< contours.size()<< endl;
+     std::cout << "Number of samples found: "<< contours.size()<< std::endl;
 
     // Draw all the contours found in the previous step
     Mat drawing = Mat::zeros( temp_image2.size(), CV_8UC3 );

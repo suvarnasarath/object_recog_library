@@ -123,7 +123,7 @@ bool process_image(cv::Mat image_hsv, int index)
      }
    
     // Print the number of samples found
-     cout << "Number of samples found: "<< contours.size()<< endl;
+     std::cout << "Number of samples found: "<< contours.size()<< std::endl;
 
     // Draw all the contours found in the previous step
     Mat drawing = Mat::zeros( temp_image2.size(), CV_8UC3 );
@@ -151,7 +151,7 @@ cv::Mat find_objects(const Mat * image)
     Input_image = *image;
     
     if(! Input_image.data) {
-        cout << "could not read image"<< endl;
+        std::cout << "could not read image"<< std::endl;
     }
     
     // Convert the color space to HSV
