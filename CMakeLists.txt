@@ -102,19 +102,19 @@ include_directories(
 )
 
 ## Declare a cpp library
-# add_library(object_recog
-#   src/${PROJECT_NAME}/object_recog.cpp
-# )
+ add_library(object_recog
+   src/detection.cpp
+ )
 
 ## Declare a cpp executable
-add_executable(object_recog_node src/object_recog_node.cpp src/detection.h src/detection.cpp)
+add_executable(object_recog_test src/image.cpp)
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
-add_dependencies(object_recog_node object_recog_generate_messages_cpp)
+add_dependencies(object_recog_test object_recog)
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(object_recog_node
+target_link_libraries(object_recog_node object_recog
   ${catkin_LIBRARIES}
 )
 
