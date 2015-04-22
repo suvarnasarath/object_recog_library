@@ -5,18 +5,8 @@
 
 void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 {
-/*
-  try
-  {
-    cv::imshow("view", cv_bridge::toCvShare(msg, "bgr8")->image);
-    cv::WaitKey(30);
-  }
-  catch (cv_bridge::Exception& e)
-  {
-    ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
-  }
-*/
-  std::cout << "." << std::endl;
+
+   std::cout << "." << std::endl;
 }
 
 int main(int argc, char **argv)
@@ -32,5 +22,4 @@ int main(int argc, char **argv)
   image_transport::ImageTransport it(topic);
   image_transport::Subscriber sub = it.subscribe(topic, 1, imageCallback);
   ros::spin();
-  //cv::destroyWindow("view");
 }
