@@ -25,6 +25,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 
 int main(int argc, char **argv)
 {
+  register_sample();
   ros::init(argc, argv, "image_listener");
   ros::NodeHandle nh;
   ros::NodeHandle np("~");

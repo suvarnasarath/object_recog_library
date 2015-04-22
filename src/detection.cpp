@@ -1,8 +1,30 @@
 #include "detection.h"
 
+#define MAX_SAMPLES (256)
+
 // Globals
 RNG rng(12345);
 int kernel_size = 3;
+
+typedef struct
+{
+	unsigned int id;
+	double x;
+	double y;
+}DETECTED_SAMPLE;
+
+typedef struct
+{
+	unsigned int Id;
+	std::vector<int> HSV_MIN;
+	std::vector<int> HSV_MAX;
+	double min_width;
+	double max_width;
+	double min_height;
+	double max_height;
+}SAMPLE;
+
+std::vector<SAMPLE> sample;
 
 cv::Mat Input_image;
 
@@ -11,23 +33,38 @@ cv::Mat Input_image;
 #define COLOR_SPACE (6)  // Min and Max HSV valuse
 
 static const int samplearray[COLOR_SPACE * NUM_SAMPLES]={165,50,50,175,255,255   // Red hockey puck
-                                                  ,20,50,50,30,255,255     // Yellow PVC pipe
-                                                  ,5,50,50,15,255,255      // Orange PVC pipe
-                                                  ,90,60,60,110,255,255    // White hooked sample
-                                                  ,0,50,50,5,255,255       // Pink Tennis Ball
+													  ,20,50,50,30,255,255     // Yellow PVC pipe
+													  ,5,50,50,15,255,255      // Orange PVC pipe
+													  ,90,60,60,110,255,255    // White hooked sample
+													  ,0,50,50,5,255,255       // Pink Tennis Ball
                                     /******** Add more color spaces here ***********/
                                         };
 
 std::vector<int> ObjectTypes ( samplearray, samplearray + sizeof(samplearray) / sizeof(samplearray[0]) );
+
+
+bool register_sample(unsigned int Id, std::vector<int>hsv_min, std::vector<int>hsv_max, double min_width, double max_width, double min_height, double max_height)
+{
+	SAMPLE new_sample;
+	new_sample.Id = Id;
+	new_sample.HSV_MIN = hsv_min;
+	new_sample.HSV_MAX = hsv_max;
+	new_sample.min_width = min_width;
+	new_sample.max_width = max_width;
+	new_sample.min_height = min_height;
+	new_sample.max_height = max_height;
+
+	sample.push_back(new_sample);
+	std::cout<<"added new sample Id = " << Id << std::endl;
+}
 
 bool process_image(cv::Mat image_hsv, int index)
 {    
     cv::Mat temp_image1, temp_image2 ;
     std::vector<vector<Point> > contours;
     std::vector<Vec4i> hierarchy;
+    cv::Scalar min,max;
 
-    // Don't ever ask me why I wrote the following 7 lines of code
-    cv::Scalar min,max;    
     min.val[0] = ObjectTypes[index++];
     min.val[1] = ObjectTypes[index++];
     min.val[2] = ObjectTypes[index++];
