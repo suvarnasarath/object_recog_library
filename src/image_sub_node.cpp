@@ -16,16 +16,21 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
     ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
   }
 */
+  std::cout << "." << std::endl;
 }
 
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "image_listener");
   ros::NodeHandle nh;
-  //cv::namedWindow("view");
-  //cv::startWindowThread();
-  image_transport::ImageTransport it(nh);
-  image_transport::Subscriber sub = it.subscribe("camera/image", 1, imageCallback);
+  ros::NodeHandle np("~");
+  std::string topic;
+  if(!np.getParam("topic",topic))
+  {
+    topic = "camera/image";
+  }
+  image_transport::ImageTransport it(topic);
+  image_transport::Subscriber sub = it.subscribe(topic, 1, imageCallback);
   ros::spin();
   //cv::destroyWindow("view");
 }
