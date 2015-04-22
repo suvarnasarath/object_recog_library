@@ -3,70 +3,6 @@
 // Globals
 RNG rng(12345);
 int kernel_size = 3;
-/*
-
-int find_objects(const Mat * image)
-{
-    Mat image_cpy,image_hsv,img_final,img_final1;
-    //image = imread(imgPtr,CV_LOAD_IMAGE_COLOR);
-    image_cpy = *image;
-    
-    if(! image_cpy.data) {
-        cout << "could not read image"<< endl;
-        return -1;
-    }
-    
-    //vector<vector<Point> > contours;
-    vector<vector<Point> > contours_poly( contours.size() );
-    vector<Rect> boundRect( contours.size() );
-    vector<Vec4i> hierarchy;
-
-    //image from my camera is too big, rescaling it.
-    //resize(image,image1,cvSize(512,512),0.5,0.5);
-
-    // Convert the color space to HSV
-    cvtColor(image_cpy,image_hsv,CV_BGR2HSV);
-    // Mark all pixels in the required color range high and other pixels low.
-    // To do: Need to look for an array of color ranges for different colored samples
-    inRange(image_hsv,Scalar(165,50,50),Scalar(175,255,255),img_final1);
-
-    // Gives the kernel shape for erosion.
-    // To do: Experiment with different kernels
-    Mat element = getStructuringElement( MORPH_RECT, Size(2*kernel_size+1,2*kernel_size+1), Point(0,0));
-
-    // Erode the image to get rid of trace elements with similar color to the required sample
-    erode(img_final1,img_final,element);
-    // Find contours in the thresholded image to determine shapes
-    findContours(img_final,contours,hierarchy,CV_RETR_TREE,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
-
-
-    for( int i = 0; i < contours.size(); i++ )
-     { 
-        approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
-        boundRect[i] = boundingRect( Mat(contours_poly[i]) );
-     }
-
-#ifdef DRAW
-    // Print the number of samples found
-    cout << "Number of samples found: "<< contours.size()<< endl;
-
-    // Draw all the contours found in the previous step
-    Mat drawing = Mat::zeros( img_final.size(), CV_8UC3 );
-    for( int i = 0; i< contours.size(); i++ )
-     {
-       Scalar color = Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
-       drawContours( drawing, contours_poly, i, color, 2, 8, hierarchy, 0, Point() );
-
-       // Draw a bounding box
-       rectangle( drawing, boundRect[i].tl(), boundRect[i].br(), color, 2, 8, 0 );
-     }
-#endif
-
-     // return the number of objects found
-     return contours.size();
- }
-
-*/
 
 cv::Mat Input_image;
 
@@ -141,8 +77,8 @@ bool process_image(cv::Mat image_hsv, int index)
 
 void display_image(cv::Mat orig)
 {
-    namedWindow("Input Image: ", WINDOW_AUTOSIZE);
-    imshow("Input Image: ",orig);
+   // cv::namedWindow("Input Image: ", WINDOW_AUTOSIZE);
+   // cv::imshow("Input Image: ",orig);
 }
 
 cv::Mat find_objects(const Mat * image)
@@ -170,7 +106,7 @@ cv::Mat find_objects(const Mat * image)
     // Display images
 #ifdef DRAW
     display_image(Input_image);
+    //cv::waitKey(0);
 #endif
-    waitKey(0);  
     return Input_image;
 }
