@@ -5,9 +5,10 @@
 using namespace cv;
 
 // Globals
-RNG rng(12345);
+RNG rng(12345);  // Don't panic, used only for color display
 int kernel_size = 3;
 
+cv::Mat Input_image;
 /*
  * Definition of input sample
  * @ id : Id of the sample
@@ -25,6 +26,7 @@ typedef struct
 	double max_width;
 	double min_height;
 	double max_height;
+	bool isValid;  // Should we check for this sample in out detector
 }REGISTERED_SAMPLE;
 
 /*
@@ -43,11 +45,9 @@ typedef struct
 	double VFov;   // Vertical field of view
 }platform_camera_parameters;
 
-std::vector<REGISTERED_SAMPLE> samples;
+std::vector<REGISTERED_SAMPLE> registered_sample;
 std::vector<DETECTED_SAMPLE> detected_samples;
 std::vector<platform_camera_parameters>camera_parameters;
-
-cv::Mat Input_image;
 
 void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std::vector<int>&hsv_max, double min_width, double max_width, double min_height, double max_height)
 {
@@ -59,8 +59,9 @@ void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std
 	new_sample.max_width = max_width;
 	new_sample.min_height = min_height;
 	new_sample.max_height = max_height;
+	new_sample.isValid = true; // true by default for all samples
 
-	samples.push_back(new_sample);
+	registered_sample.push_back(new_sample);
 	std::cout<<"added new sample Id = " << Id << std::endl;
 }
 
@@ -69,27 +70,32 @@ void register_camera(unsigned int camera_id, double camera_height, double camera
 {
 	platform_camera_parameters camera_spec;
 
-	camera_spec.camera_Id = camera_id;
-	camera_spec.height = camera_height;
-	camera_spec.pitch = camera_pitch;
-	camera_spec.HFov = camera_HFov;
-	camera_spec.VFov = camera_VFov;
+	// Supports only one camera at this time.
+	if(camera_parameters.size() < 1)
+	{
+		camera_spec.camera_Id = camera_id;
+		camera_spec.height = camera_height;
+		camera_spec.pitch = camera_pitch;
+		camera_spec.HFov = camera_HFov;
+		camera_spec.VFov = camera_VFov;
 
-	camera_parameters.push_back(camera_spec);
+		camera_parameters.push_back(camera_spec);
+	} else {
+		std::cout <<"WARNING: Library supports only one camera for now" << std::endl;
+	}
 }
 
 int get_registered_sample_size()
 {
-	return samples.size();
+	return registered_sample.size();
 }
 
 void set_sample_filter(const std::vector<unsigned int> &filter)
 {
-	// Todo:
-
+	// Todo: implement filter valid samples
 }
 
-bool process_image(cv::Mat image_hsv, int index)
+bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
 {    
 	DETECTED_SAMPLE sample;
 	// sample index is same for all samples this call
@@ -100,7 +106,7 @@ bool process_image(cv::Mat image_hsv, int index)
     std::vector<Vec4i> hierarchy;
 
     // Mark all pixels in the required color range high and other pixels low.
-    inRange(image_hsv,samples[index].HSV_MIN,samples[index].HSV_MAX,temp_image1);
+    inRange(image_hsv,registered_sample[index].HSV_MIN,registered_sample[index].HSV_MAX,temp_image1);
 
     // Gives the kernel shape for erosion.
     // To do: Experiment with different kernels
@@ -114,60 +120,54 @@ bool process_image(cv::Mat image_hsv, int index)
 
     std::vector<vector<Point> > contours_poly( contours.size() );
     std::vector<Rect> boundRect( contours.size() );
-    for( int i = 0; i < contours.size(); i++ )
+    for( int i = 0; i < contours.size(); ++i)
      {
         approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
         boundRect[i] = boundingRect( Mat(contours_poly[i]) );
+        // Get world pos
+        detected_samples.push_back(sample);
      }
    
     // Print the number of samples found
     std::cout << "Number of samples found: "<< contours.size()<< std::endl;
 
-    // Draw all the contours found in the previous step
-    Mat drawing = Mat::zeros( temp_image2.size(), CV_8UC3 );
-    for( int i = 0; i< contours.size(); i++ )
-     {
-       Scalar color = Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
-       drawContours( drawing, contours_poly, i, color, 2, 8, hierarchy, 0, Point() );
+    if(out_image != NULL)
+    {
+		// Draw all the contours found in the previous step
+		Mat drawing = Mat::zeros( temp_image2.size(), CV_8UC3 );
+		for( int i = 0; i< contours.size(); i++ )
+		 {
+		   Scalar color = Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
+		   drawContours( drawing, contours_poly, i, color, 2, 8, hierarchy, 0, Point() );
 
-       // Draw a bounding box
-       rectangle( Input_image, boundRect[i].tl(), boundRect[i].br(), (0,0,255), 2, 8, 0 );
-
-	   //detected_samples.push_back(sample);
-     }
+		   // Draw a bounding box
+		   rectangle(*out_image, boundRect[i].tl(), boundRect[i].br(), (0,0,255), 2, 8, 0 );
+		 }
+    }
     return true;
 }
 void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
 	cv::Mat hsv_image;
-	DETECTED_SAMPLE test_sample;
-	// Test sample values for integration
-	test_sample.id = 0;
-	test_sample.x = 0;
-	test_sample.y = 0;
-	test_sample.projected_width = 0;
-
-	Input_image = *imgPtr;
-
-	if(! Input_image.data) {
-		std::cout << "could not read image"<< std::endl;
+	if(! imgPtr->data) {
+		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
 	}
+	Input_image = *imgPtr;
 
 	// Convert the color space to HSV
 	cv::cvtColor(Input_image,hsv_image,CV_BGR2HSV);
 
-	// Clear detected_sample struct before filling in with new image data
+	// Clear detected_sample structure before filling in with new image data
 	detected_samples.clear();
 
 	// Get the iterator for the vector color space and loop through all sample color's
-	for(int index = 0; index < samples.size(); ++index)
+	for(int index = 0; index < registered_sample.size(); ++index)
 	{
-		if(!process_image(hsv_image, index))
+		if(registered_sample[index].isValid)
 		{
-			std::cout << "Processing images failed" << std::endl;
+		  process_image(hsv_image, out_image,index,detected_samples);
 		}
 	}
-	//return test_sample;
 }
 
