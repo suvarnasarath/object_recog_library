@@ -2,9 +2,30 @@
 
 #define MAX_SAMPLES (256)
 
+using namespace cv;
+
 // Globals
 RNG rng(12345);
 int kernel_size = 3;
+
+/*
+ * Definition of input sample
+ * @ id : Id of the sample
+ * @ HSV_MIN: Min values for HCV color space
+ * @ HSV_MAX: Max values for HCV color space
+ * @ min and max width of the sample to search
+ * @ min and max height of the sample to search
+ */
+typedef struct
+{
+	unsigned int Id;
+	std::vector<int> HSV_MIN;
+	std::vector<int> HSV_MAX;
+	double min_width;
+	double max_width;
+	double min_height;
+	double max_height;
+}REGISTERED_SAMPLE;
 
 /*
  * Definition of camera platform specs
@@ -28,7 +49,7 @@ std::vector<platform_camera_parameters>camera_parameters;
 
 cv::Mat Input_image;
 
-void register_sample(unsigned int Id, std::vector<int>hsv_min, std::vector<int>hsv_max, double min_width, double max_width, double min_height, double max_height)
+void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std::vector<int>&hsv_max, double min_width, double max_width, double min_height, double max_height)
 {
 	REGISTERED_SAMPLE new_sample;
 	new_sample.Id = Id;
@@ -57,16 +78,23 @@ void register_camera(unsigned int camera_id, double camera_height, double camera
 	camera_parameters.push_back(camera_spec);
 }
 
-int get_registered_sampleSize()
+int get_registered_sample_size()
 {
 	return samples.size();
+}
+
+void set_sample_filter(const std::vector<unsigned int> &filter)
+{
+	// Todo:
+
 }
 
 bool process_image(cv::Mat image_hsv, int index)
 {    
 	DETECTED_SAMPLE sample;
-	// sample index is same for this call
+	// sample index is same for all samples this call
 	sample.id = index;
+
     cv::Mat temp_image1, temp_image2 ;
     std::vector<vector<Point> > contours;
     std::vector<Vec4i> hierarchy;
@@ -109,8 +137,7 @@ bool process_image(cv::Mat image_hsv, int index)
      }
     return true;
 }
-
-DETECTED_SAMPLE find_objects(const Mat *image)
+void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
 	cv::Mat hsv_image;
 	DETECTED_SAMPLE test_sample;
@@ -120,11 +147,11 @@ DETECTED_SAMPLE find_objects(const Mat *image)
 	test_sample.y = 0;
 	test_sample.projected_width = 0;
 
-	Input_image = *image;
+	Input_image = *imgPtr;
 
 	if(! Input_image.data) {
 		std::cout << "could not read image"<< std::endl;
-		return test_sample;
+		return;
 	}
 
 	// Convert the color space to HSV
@@ -141,43 +168,6 @@ DETECTED_SAMPLE find_objects(const Mat *image)
 			std::cout << "Processing images failed" << std::endl;
 		}
 	}
-	return test_sample;
+	//return test_sample;
 }
 
-/*
-void display_image(cv::Mat orig)
-{
-   // cv::namedWindow("Input Image: ", WINDOW_AUTOSIZE);
-   // cv::imshow("Input Image: ",orig);
-}
-
-cv::Mat find_objects(const Mat * image)
-{
-    cv::Mat hsv_image;
-    Input_image = *image;
-    
-    if(! Input_image.data) {
-        std::cout << "could not read image"<< std::endl;
-    }
-    
-    // Convert the color space to HSV
-    cv::cvtColor(Input_image,hsv_image,CV_BGR2HSV);
-
-    // Get the iterator for the vector color space and loop through all sample color's
-    //for(it = ObjectTypes.begin(); it != ObjectTypes.end(); it++)
-    for(int index = 0; index < samples.size(); ++index)
-    {
-        if(!process_image(hsv_image, index))
-        {
-            std::cout << "Processing images failed" << std::endl;
-        }  
-    }
-
-    // Display images
-#ifdef DRAW
-    display_image(Input_image);
-    //cv::waitKey(0);
-#endif
-    return Input_image;
-}
-*/

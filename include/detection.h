@@ -7,8 +7,6 @@
 #include <iostream>
 #include <vector>
 
-using namespace cv;
-
 /*
  * Definition of output sample
  * @ id : Id of the sample
@@ -22,31 +20,12 @@ typedef struct
 	double projected_width;
 }DETECTED_SAMPLE;
 
-/*
- * Definition of input sample
- * @ id : Id of the sample
- * @ HSV_MIN: Min values for HCV color space
- * @ HSV_MAX: Max values for HCV color space
- * @ min and max width of the sample to search
- * @ min and max height of the sample to search
- */
-typedef struct
-{
-	unsigned int Id;
-	std::vector<int> HSV_MIN;
-	std::vector<int> HSV_MAX;
-	double min_width;
-	double max_width;
-	double min_height;
-	double max_height;
-}REGISTERED_SAMPLE;
-
-DETECTED_SAMPLE find_objects(const Mat * imgPtr);
-void register_sample(unsigned int Id,
-					 std::vector<int>hsv_min, std::vector<int>hsv_max,
+void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples);
+void register_sample(unsigned int Id, const std::vector<int>&hsv_min, const std::vector<int>&hsv_max,
 					 double min_width, double max_width, double min_height, double max_height);
 void register_camera(unsigned int camera_id, double camera_height, double camera_pitch,
 						double camera_HFov, double camera_VFov);
-int get_registered_sampleSize();
+int get_registered_sample_size();
+void set_sample_filter(const std::vector<unsigned int> &filter);
 
 #endif
