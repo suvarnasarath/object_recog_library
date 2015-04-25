@@ -6,38 +6,7 @@
 RNG rng(12345);
 int kernel_size = 3;
 
-/*
- * Definition of output sample
- * @ id : Id of the sample
- * @ x,y: position in world coordinates.
- */
-typedef struct
-{
-	unsigned int id;
-	double x;
-	double y;
-}DETECTED_SAMPLE;
-
-/*
- * Definition of input sample
- * @ id : Id of the sample
- * @ HSV_MIN: Min values for HCV color space
- * @ HSV_MAX: Max values for HCV color space
- * @ min and max width of the sample to search
- * @ min and max height of the sample to search
- */
-typedef struct
-{
-	unsigned int Id;
-	std::vector<int> HSV_MIN;
-	std::vector<int> HSV_MAX;
-	double min_width;
-	double max_width;
-	double min_height;
-	double max_height;
-}SAMPLE;
-
-std::vector<SAMPLE> sample;
+std::vector<SAMPLE> samples;
 
 cv::Mat Input_image;
 
@@ -52,13 +21,13 @@ void register_sample(unsigned int Id, std::vector<int>hsv_min, std::vector<int>h
 	new_sample.min_height = min_height;
 	new_sample.max_height = max_height;
 
-	sample.push_back(new_sample);
+	samples.push_back(new_sample);
 	std::cout<<"added new sample Id = " << Id << std::endl;
 }
 
 int getSampleSize()
 {
-	return sample.size();
+	return samples.size();
 }
 
 bool process_image(cv::Mat image_hsv, int index)
@@ -68,7 +37,7 @@ bool process_image(cv::Mat image_hsv, int index)
     std::vector<Vec4i> hierarchy;
 
     // Mark all pixels in the required color range high and other pixels low.
-    inRange(image_hsv,sample[index].HSV_MIN,sample[index].HSV_MAX,temp_image1);
+    inRange(image_hsv,samples[index].HSV_MIN,samples[index].HSV_MAX,temp_image1);
 
     // Gives the kernel shape for erosion.
     // To do: Experiment with different kernels
@@ -112,6 +81,38 @@ void display_image(cv::Mat orig)
    // cv::imshow("Input Image: ",orig);
 }
 
+DETECTED_SAMPLE find_objects(const Mat *image)
+{
+	cv::Mat hsv_image;
+	DETECTED_SAMPLE test_sample;
+	// Test sample values for integration
+	test_sample.id = 0;
+	test_sample.x = 0;
+	test_sample.y = 0;
+
+	Input_image = *image;
+
+	if(! Input_image.data) {
+		std::cout << "could not read image"<< std::endl;
+	}
+
+	// Convert the color space to HSV
+	cv::cvtColor(Input_image,hsv_image,CV_BGR2HSV);
+
+	// Get the iterator for the vector color space and loop through all sample color's
+	//for(it = ObjectTypes.begin(); it != ObjectTypes.end(); it++)
+	for(int index = 0; index < samples.size(); ++index)
+	{
+		if(!process_image(hsv_image, index))
+		{
+			std::cout << "Processing images failed" << std::endl;
+		}
+	}
+	return test_sample;
+
+}
+
+/*
 cv::Mat find_objects(const Mat * image)
 {
     cv::Mat hsv_image;
@@ -126,7 +127,7 @@ cv::Mat find_objects(const Mat * image)
 
     // Get the iterator for the vector color space and loop through all sample color's
     //for(it = ObjectTypes.begin(); it != ObjectTypes.end(); it++)
-    for(int index = 0; index < sample.size(); ++index)
+    for(int index = 0; index < samples.size(); ++index)
     {
         if(!process_image(hsv_image, index))
         {
@@ -141,3 +142,4 @@ cv::Mat find_objects(const Mat * image)
 #endif
     return Input_image;
 }
+*/
