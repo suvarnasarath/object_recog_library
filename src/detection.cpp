@@ -7,6 +7,8 @@ RNG rng(12345);
 int kernel_size = 3;
 
 std::vector<SAMPLE> samples;
+std::vector<DETECTED_SAMPLE> detected_samples;
+std::vector<platform_camera_parameters>camera_parameters;
 
 cv::Mat Input_image;
 
@@ -25,6 +27,11 @@ void register_sample(unsigned int Id, std::vector<int>hsv_min, std::vector<int>h
 	std::cout<<"added new sample Id = " << Id << std::endl;
 }
 
+void register_camera(std::vector<platform_camera_parameters> camera_specs)
+{
+	camera_parameters = camera_specs;
+}
+
 int getSampleSize()
 {
 	return samples.size();
@@ -32,6 +39,9 @@ int getSampleSize()
 
 bool process_image(cv::Mat image_hsv, int index)
 {    
+	DETECTED_SAMPLE sample;
+	// sample index is same for this call
+	sample.id = index;
     cv::Mat temp_image1, temp_image2 ;
     std::vector<vector<Point> > contours;
     std::vector<Vec4i> hierarchy;
@@ -42,7 +52,6 @@ bool process_image(cv::Mat image_hsv, int index)
     // Gives the kernel shape for erosion.
     // To do: Experiment with different kernels
     Mat element = getStructuringElement( MORPH_RECT, Size(2*kernel_size+1,2*kernel_size+1), Point(0,0));
-
 
     // Erode the image to get rid of trace elements with similar color to the required sample
     erode(temp_image1,temp_image2,element);
@@ -59,7 +68,7 @@ bool process_image(cv::Mat image_hsv, int index)
      }
    
     // Print the number of samples found
-     std::cout << "Number of samples found: "<< contours.size()<< std::endl;
+    std::cout << "Number of samples found: "<< contours.size()<< std::endl;
 
     // Draw all the contours found in the previous step
     Mat drawing = Mat::zeros( temp_image2.size(), CV_8UC3 );
@@ -70,15 +79,10 @@ bool process_image(cv::Mat image_hsv, int index)
 
        // Draw a bounding box
        rectangle( Input_image, boundRect[i].tl(), boundRect[i].br(), (0,0,255), 2, 8, 0 );
+
+	   //detected_samples.push_back(sample);
      }
-
     return true;
-}
-
-void display_image(cv::Mat orig)
-{
-   // cv::namedWindow("Input Image: ", WINDOW_AUTOSIZE);
-   // cv::imshow("Input Image: ",orig);
 }
 
 DETECTED_SAMPLE find_objects(const Mat *image)
@@ -89,18 +93,22 @@ DETECTED_SAMPLE find_objects(const Mat *image)
 	test_sample.id = 0;
 	test_sample.x = 0;
 	test_sample.y = 0;
+	test_sample.projected_width = 0;
 
 	Input_image = *image;
 
 	if(! Input_image.data) {
 		std::cout << "could not read image"<< std::endl;
+		return test_sample;
 	}
 
 	// Convert the color space to HSV
 	cv::cvtColor(Input_image,hsv_image,CV_BGR2HSV);
 
+	// Clear detected_sample struct before filling in with new image data
+	detected_samples.clear();
+
 	// Get the iterator for the vector color space and loop through all sample color's
-	//for(it = ObjectTypes.begin(); it != ObjectTypes.end(); it++)
 	for(int index = 0; index < samples.size(); ++index)
 	{
 		if(!process_image(hsv_image, index))
@@ -109,10 +117,15 @@ DETECTED_SAMPLE find_objects(const Mat *image)
 		}
 	}
 	return test_sample;
-
 }
 
 /*
+void display_image(cv::Mat orig)
+{
+   // cv::namedWindow("Input Image: ", WINDOW_AUTOSIZE);
+   // cv::imshow("Input Image: ",orig);
+}
+
 cv::Mat find_objects(const Mat * image)
 {
     cv::Mat hsv_image;

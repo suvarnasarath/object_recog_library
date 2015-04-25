@@ -13,7 +13,8 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 		  const cv::Mat * imagePtr = &(cv_ptr->image);
 
 		  cv::Mat out_image;
-		  //out_image = find_objects(imagePtr);
+		  //DETECTED_SAMPLE found_sample;
+		  //found_sample = find_objects(imagePtr);
 		  sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", out_image).toImageMsg();
 		  pub.publish(msg);
 	  } catch (cv_bridge::Exception& e) {
