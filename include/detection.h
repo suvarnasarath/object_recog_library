@@ -39,28 +39,14 @@ typedef struct
 	double max_width;
 	double min_height;
 	double max_height;
-}SAMPLE;
-
-/*
- * Definition of camera platform specs
- * @ height: Height of the camera from ground plane
- * @ pitch : Pitch of the camera
- * @ HFov  :
- * @ VFov  :
- */
-typedef struct
-{
-	double height; // height of the camera from ground plane
-	double pitch;  // Pitch angle of the camera (up from down)
-	double HFov;   // Horizontal field of view
-	double VFov;   // Vertical field of view
-}platform_camera_parameters;
+}REGISTERED_SAMPLE;
 
 DETECTED_SAMPLE find_objects(const Mat * imgPtr);
 void register_sample(unsigned int Id,
 					 std::vector<int>hsv_min, std::vector<int>hsv_max,
 					 double min_width, double max_width, double min_height, double max_height);
-void register_camera(std::vector<platform_camera_parameters> camera_specs)
-int getSampleSize();
+void register_camera(unsigned int camera_id, double camera_height, double camera_pitch,
+						double camera_HFov, double camera_VFov);
+int get_registered_sampleSize();
 
 #endif

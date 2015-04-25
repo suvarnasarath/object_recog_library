@@ -45,7 +45,7 @@ int main(int argc, char **argv)
   AddSampleforDetection(4,90,60,60,110,255,255,1,1,1,1);  // White hooked sample
   AddSampleforDetection(5,0,50,50,5,255,255,1,1,1,1);     // Pink Tennis Ball
 
-  std::cout << "sample size = " << getSampleSize() << std::endl;
+  std::cout << "sample size = " << get_registered_sampleSize() << std::endl;
 
   if(!np.getParam("topic",topic))
   {

@@ -6,7 +6,23 @@
 RNG rng(12345);
 int kernel_size = 3;
 
-std::vector<SAMPLE> samples;
+/*
+ * Definition of camera platform specs
+ * @ height: Height of the camera from ground plane
+ * @ pitch : Pitch of the camera
+ * @ HFov  : Horizontal field of view of the camera lense
+ * @ VFov  : Vertical field of view of the camera lense
+ */
+typedef struct
+{
+	unsigned int camera_Id; // camera number
+	double height; // height of the camera from ground plane
+	double pitch;  // Pitch angle of the camera (up from down)
+	double HFov;   // Horizontal field of view
+	double VFov;   // Vertical field of view
+}platform_camera_parameters;
+
+std::vector<REGISTERED_SAMPLE> samples;
 std::vector<DETECTED_SAMPLE> detected_samples;
 std::vector<platform_camera_parameters>camera_parameters;
 
@@ -14,7 +30,7 @@ cv::Mat Input_image;
 
 void register_sample(unsigned int Id, std::vector<int>hsv_min, std::vector<int>hsv_max, double min_width, double max_width, double min_height, double max_height)
 {
-	SAMPLE new_sample;
+	REGISTERED_SAMPLE new_sample;
 	new_sample.Id = Id;
 	new_sample.HSV_MIN = hsv_min;
 	new_sample.HSV_MAX = hsv_max;
@@ -27,12 +43,21 @@ void register_sample(unsigned int Id, std::vector<int>hsv_min, std::vector<int>h
 	std::cout<<"added new sample Id = " << Id << std::endl;
 }
 
-void register_camera(std::vector<platform_camera_parameters> camera_specs)
+void register_camera(unsigned int camera_id, double camera_height, double camera_pitch,
+						double camera_HFov, double camera_VFov)
 {
-	camera_parameters = camera_specs;
+	platform_camera_parameters camera_spec;
+
+	camera_spec.camera_Id = camera_id;
+	camera_spec.height = camera_height;
+	camera_spec.pitch = camera_pitch;
+	camera_spec.HFov = camera_HFov;
+	camera_spec.VFov = camera_VFov;
+
+	camera_parameters.push_back(camera_spec);
 }
 
-int getSampleSize()
+int get_registered_sampleSize()
 {
 	return samples.size();
 }
