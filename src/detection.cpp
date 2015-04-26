@@ -10,7 +10,16 @@ int kernel_size = 3;
 
 bool bPrintDebugMsg = false;
 
-cv::Mat Input_image;
+cv::Mat Input_image, Rotation_matrix;
+
+typedef struct
+{
+	unsigned int x;
+	unsigned int y;
+}PIXEL;
+
+void get_world_pos(unsigned int cameraId, PIXEL &pos);
+void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &psi, double &theta);
 /*
  * Definition of input sample
  * @ id : Id of the sample
@@ -140,7 +149,8 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
         approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
         boundRect[i] = boundingRect( Mat(contours_poly[i]) );
         // Get world pos
-        detected_samples.push_back(sample);
+        //get_world_pos();
+        //detected_samples.push_back(sample);
      }
    
     // Print the number of samples found
@@ -161,6 +171,42 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
 		 }
     }
     return true;
+}
+
+/*
+ * Gives the world position
+ * @ pos	  : Location of the desired pixel
+ * @ camera ID: Assuming that there is only 1 camera for now
+ */
+void get_world_pos(unsigned int cameraId, PIXEL &pos)
+{
+	double psi;
+	double theta;
+
+	for(int index =0; index < camera_parameters.size();++index)
+	{
+		if(camera_parameters[index].camera_Id != cameraId)
+		{
+			if(bPrintDebugMsg)
+				std::cout << "cameraId does not match" << std::endl;
+			continue;
+		} else {
+			break;
+		}
+	}
+
+	if(pos.x < camera_parameters[cameraId].Hpixels && pos.y > camera_parameters[cameraId].Vpixels)
+	{
+		calculate_pixel_attitude_and_azimuth(pos, psi, theta);
+		// get rotation matrix and compute the vector for ray plane intersection
+
+	}
+}
+
+void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &psi, double &theta)
+{
+	psi =   (1/camera_parameters[0].Hpixels)*(pixel_pos.x * camera_parameters[0].HFov);
+	theta = (1/camera_parameters[0].Vpixels)*(pixel_pos.y * camera_parameters[0].VFov);
 }
 
 void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)

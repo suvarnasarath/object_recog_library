@@ -20,6 +20,8 @@ typedef struct
 	double projected_width;
 }DETECTED_SAMPLE;
 
+
+
 void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples);
 void register_sample(unsigned int Id, const std::vector<int>&hsv_min, const std::vector<int>&hsv_max,
 					 double min_width, double max_width, double min_height, double max_height);
