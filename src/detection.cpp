@@ -45,6 +45,8 @@ typedef struct
 	double pitch;  // Pitch angle of the camera (up from down)
 	double HFov;   // Horizontal field of view
 	double VFov;   // Vertical field of view
+	unsigned int Hpixels;
+	unsigned int Vpixels;
 }platform_camera_parameters;
 
 std::vector<REGISTERED_SAMPLE> registered_sample;
@@ -77,7 +79,7 @@ void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std
 }
 
 void register_camera(unsigned int camera_id, double camera_height, double camera_pitch,
-						double camera_HFov, double camera_VFov)
+						double camera_HFov, double camera_VFov, unsigned int Hpixels, unsigned int Vpixels)
 {
 	platform_camera_parameters camera_spec;
 
@@ -89,6 +91,8 @@ void register_camera(unsigned int camera_id, double camera_height, double camera
 		camera_spec.pitch = camera_pitch;
 		camera_spec.HFov = camera_HFov;
 		camera_spec.VFov = camera_VFov;
+		camera_spec.Hpixels = Hpixels;
+		camera_spec.Vpixels = Vpixels;
 
 		camera_parameters.push_back(camera_spec);
 	} else {
