@@ -8,6 +8,8 @@ using namespace cv;
 RNG rng(12345);  // Don't panic, used only for color display
 int kernel_size = 3;
 
+bool bPrintDebugMsg = false;
+
 cv::Mat Input_image;
 /*
  * Definition of input sample
@@ -48,6 +50,15 @@ typedef struct
 std::vector<REGISTERED_SAMPLE> registered_sample;
 std::vector<DETECTED_SAMPLE> detected_samples;
 std::vector<platform_camera_parameters>camera_parameters;
+
+void Set_debug(bool enable)
+{
+	bPrintDebugMsg = enable;
+	if(bPrintDebugMsg)
+	{
+		std::cout << "Debug messages enabled:" << std::endl;
+	}
+}
 
 void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std::vector<int>&hsv_max, double min_width, double max_width, double min_height, double max_height)
 {
@@ -129,7 +140,8 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
      }
    
     // Print the number of samples found
-    std::cout << "Number of samples found: "<< contours.size()<< std::endl;
+    if(bPrintDebugMsg)
+    	std::cout << "Number of samples found: "<< contours.size()<< std::endl;
 
     if(out_image != NULL)
     {
@@ -146,6 +158,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     }
     return true;
 }
+
 void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
 	cv::Mat hsv_image;

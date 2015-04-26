@@ -27,5 +27,6 @@ void register_camera(unsigned int camera_id, double camera_height, double camera
 						double camera_HFov, double camera_VFov);
 int get_registered_sample_size();
 void set_sample_filter(const std::vector<unsigned int> &filter);
+void Set_debug(bool enable);
 
 #endif
