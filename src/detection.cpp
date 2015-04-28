@@ -1,7 +1,8 @@
+#include <math.h>
 #include "detection.h"
 
 #define MAX_SAMPLES (256)
-
+#define PI (3.14159265)
 using namespace cv;
 
 // Globals
@@ -10,8 +11,11 @@ int kernel_size = 3;
 
 bool bPrintDebugMsg = false;
 
-cv::Mat Input_image, Rotation_matrix;
+cv::Mat Input_image;
 
+/*
+ * pixel definition
+ */
 typedef struct
 {
 	unsigned int x;
@@ -40,6 +44,20 @@ typedef struct
 	bool isValid;  // Should we check for this sample in out detector
 }REGISTERED_SAMPLE;
 
+/*
+ * To get rid of the annoying eclipse high-lighting problem
+ */
+/*
+#ifndef DETECTED_SAMPLE
+	typedef struct
+	{
+		unsigned int id;
+		double x;
+		double y;
+		double projected_width;
+	}DETECTED_SAMPLE;
+#endif
+*/
 /*
  * Definition of camera platform specs
  * @ height: Height of the camera from ground plane
@@ -70,6 +88,10 @@ void Set_debug(bool enable)
 		std::cout << "Debug messages enabled:" << std::endl;
 	}
 }
+
+/*
+ * registers a sample
+ */
 
 void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std::vector<int>&hsv_max, double min_width, double max_width, double min_height, double max_height)
 {
@@ -173,42 +195,6 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     return true;
 }
 
-/*
- * Gives the world position
- * @ pos	  : Location of the desired pixel
- * @ camera ID: Assuming that there is only 1 camera for now
- */
-void get_world_pos(unsigned int cameraId, PIXEL &pos)
-{
-	double psi;
-	double theta;
-
-	for(int index =0; index < camera_parameters.size();++index)
-	{
-		if(camera_parameters[index].camera_Id != cameraId)
-		{
-			if(bPrintDebugMsg)
-				std::cout << "cameraId does not match" << std::endl;
-			continue;
-		} else {
-			break;
-		}
-	}
-
-	if(pos.x < camera_parameters[cameraId].Hpixels && pos.y > camera_parameters[cameraId].Vpixels)
-	{
-		calculate_pixel_attitude_and_azimuth(pos, psi, theta);
-		// get rotation matrix and compute the vector for ray plane intersection
-
-	}
-}
-
-void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &psi, double &theta)
-{
-	psi =   (1/camera_parameters[0].Hpixels)*(pixel_pos.x * camera_parameters[0].HFov);
-	theta = (1/camera_parameters[0].Vpixels)*(pixel_pos.y * camera_parameters[0].VFov);
-}
-
 void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
 	cv::Mat hsv_image;
@@ -233,4 +219,127 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 		}
 	}
 }
+
+
+/*
+ * Gives the world position of a pixel
+ * @ pos	  : Location of the desired pixel
+ * @ camera ID: Assuming that there is only 1 camera for now
+ */
+void get_world_pos(unsigned int cameraId, PIXEL &pos)
+{
+	// Check if the pixel is within the range
+	if(pos.x < camera_parameters[cameraId].Hpixels && pos.y > camera_parameters[cameraId].Vpixels)
+	{
+
+	}
+}
+
+double RotationMatrix[3][3];
+double CartMat[3][1];
+double HeightMat[3][1];
+double Out[3][1];
+
+void Compute_rotation_height_matrix(double pitch, double height)
+{
+	RotationMatrix[0][0] =  cos(pitch);
+	RotationMatrix[0][1] = -sin(pitch);
+	RotationMatrix[0][2] =  0.0;
+
+	RotationMatrix[1][0] = sin(pitch);
+	RotationMatrix[1][1] = cos(pitch);
+	RotationMatrix[1][2] = 0.0;
+
+	RotationMatrix[2][0] = 0.0;
+	RotationMatrix[2][1] = 0.0;
+	RotationMatrix[2][2] = 1.0;
+
+	HeightMat[0][0] = 0;
+	HeightMat[1][0] = 0;
+	HeightMat[2][0] = height;
+}
+
+/*
+ * Matrix multiplication
+ * @ MatA: Input matrix A
+ * @ MatB: Input matrix B
+ * @ Prod: Output matrix
+ */
+void Multiply(const double (&matA)[3][3], const double (&matB)[3][1], double (&Product)[3][1])
+{
+	for(int i=0;i<3;++i)
+	{
+		for(int j=0;j<1;++j)
+		{
+			for(int k=0;k<3;++k)
+			{
+				Product[i][j] += matA[i][k] * matB[k][j];
+			}
+		}
+	}
+}
+
+void Add(double (&matA)[3][1], double (&matB)[3][1], double (&Sum)[3][1])
+{
+	for(int i=0;i<3;++i)
+	{
+		Sum[i][0] = matA[i][0]  + matB[i][0];
+	}
+}
+
+void compute_cartesian_vector(double psi,double theta)
+{
+	// Clear the vector before filling it in
+	for(int i=0;i<3;++i)
+	{
+		CartMat[i][0] = 0;
+	}
+	CartMat[0][0] = sin(theta) * cos(psi);
+	CartMat[1][0] = sin(theta) * sin(psi);
+	CartMat[2][0] = cos(theta);
+}
+
+void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &psi, double &theta)
+{
+	psi =   (1/camera_parameters[0].Hpixels)*(pixel_pos.x * camera_parameters[0].HFov);
+	theta = (1/camera_parameters[0].Vpixels)*(pixel_pos.y * camera_parameters[0].VFov);
+}
+
+/*
+ * This function pre-computes the distances for each pixel
+ */
+void precompute_world_pos_lookup(unsigned int cameraId, cv::Mat &distance)
+{
+	PIXEL pos;
+	double psi, theta;
+	double alpha = camera_parameters[cameraId].pitch;
+	double ray[3][1];
+
+	/*
+	 * Setup rotation matrix
+	 */
+	Compute_rotation_height_matrix(camera_parameters[cameraId].pitch,camera_parameters[cameraId].height);
+
+	for(int i =0; i < camera_parameters[cameraId].Hpixels; ++i)
+	{
+		for(int j =0; j < camera_parameters[cameraId].Vpixels; ++j)
+		{
+			pos.x = i;	pos.y = j;
+			calculate_pixel_attitude_and_azimuth(pos, psi, theta);
+			compute_cartesian_vector(psi,theta);
+			Multiply(RotationMatrix,CartMat,Out);
+			Add(HeightMat, Out,ray);
+			// print ray for debugging
+			for(int i=0;i<3;++i)
+			{
+				std::cout << ray[i] << std::endl;
+			}
+		}
+	}
+}
+
+
+
+
+
 
