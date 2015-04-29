@@ -1,15 +1,20 @@
 #include <math.h>
 #include "detection.h"
 
+using namespace cv;
+
 #define MAX_SAMPLES (256)
 #define PI          (3.14159265)
 #define INVALID     (32767)  // some large number
-using namespace cv;
+#define DEFAULT_CAMERAID (0)
+
 
 // Globals
 RNG rng(12345);  // Don't panic, used only for color display
 int kernel_size = 3;
 
+// Init flag
+bool bInit = false;
 // Set debug messages OFF by default
 bool bPrintDebugMsg = true; // Turn OFF later
 
@@ -153,14 +158,14 @@ PIXEL get_world_pos(unsigned int cameraId, PIXEL pos)
 
 void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &psi, double &theta)
 {
-	psi =   (1/camera_parameters[0].Hpixels)*(pixel_pos.x * camera_parameters[0].HFov);
-	theta = (1/camera_parameters[0].Vpixels)*(pixel_pos.y * camera_parameters[0].VFov);
+	psi =   (1/camera_parameters[DEFAULT_CAMERAID].Hpixels)*(pixel_pos.x * camera_parameters[DEFAULT_CAMERAID].HFov);
+	theta = (1/camera_parameters[DEFAULT_CAMERAID].Vpixels)*(pixel_pos.y * camera_parameters[DEFAULT_CAMERAID].VFov);
 }
 
 /*
  * This function pre-computes the distances for each pixel
  */
-void precompute_world_pos_lookup(unsigned int cameraId, cv::Mat &distance)
+void precompute_world_pos_lookup(unsigned int cameraId)
 {
 	PIXEL pixel_pos, world_pos;
 	double psi, theta, R;
@@ -223,13 +228,16 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     std::vector<vector<Point> > contours_poly( contours.size() );
     std::vector<Rect> boundRect( contours.size() );
     for( int i = 0; i < contours.size(); ++i)
-     {
+     {o
         approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
         boundRect[i] = boundingRect( Mat(contours_poly[i]) );
         // Get the pixel coordinates and return (x,y) from the lookup
         Center.x = boundRect[i].tl().x + boundRect[i].br().x;
         Center.y = boundRect[i].tl().y + boundRect[i].br().y;
-        World = get_world_pos(0,Center);
+        World = get_world_pos(DEFAULT_CAMERAID,Center);
+        sample.x = World.x;
+        sample.y = World.y;
+        sample.projected_width = boundRect[i].area();
      }
    
     // Print the number of samples found
@@ -259,6 +267,13 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
 	}
+
+	if(!bInit)
+	{
+		precompute_world_pos_lookup(DEFAULT_CAMERAID);
+		bInit = true;
+	}
+
 	Input_image = *imgPtr;
 
 	// Convert the color space to HSV
@@ -276,78 +291,3 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 		}
 	}
 }
-
-
-
-
-
-
-
-/*
-double RotationMatrix[3][3];
-double CartMat[3][1];
-double HeightMat[3][1];
-double Out[3][1];
-
-void Compute_rotation_height_matrix(double pitch, double height)
-{
-	RotationMatrix[0][0] =  cos(pitch);
-	RotationMatrix[0][1] = -sin(pitch);
-	RotationMatrix[0][2] =  0.0;
-
-	RotationMatrix[1][0] = sin(pitch);
-	RotationMatrix[1][1] = cos(pitch);
-	RotationMatrix[1][2] = 0.0;
-
-	RotationMatrix[2][0] = 0.0;
-	RotationMatrix[2][1] = 0.0;
-	RotationMatrix[2][2] = 1.0;
-
-	HeightMat[0][0] = 0;
-	HeightMat[1][0] = 0;
-	HeightMat[2][0] = height;
-}
-
-/*
- * Matrix multiplication
- * @ MatA: Input matrix A
- * @ MatB: Input matrix B
- * @ Prod: Output matrix
- *
-void Multiply(const double (&matA)[3][3], const double (&matB)[3][1], double (&Product)[3][1])
-{
-	for(int i=0;i<3;++i)
-	{
-		for(int j=0;j<1;++j)
-		{
-			for(int k=0;k<3;++k)
-			{
-				Product[i][j] += matA[i][k] * matB[k][j];
-			}
-		}
-	}
-}
-
-void Add(double (&matA)[3][1], double (&matB)[3][1], double (&Sum)[3][1])
-{
-	for(int i=0;i<3;++i)
-	{
-		Sum[i][0] = matA[i][0]  + matB[i][0];
-	}
-}
-
-void compute_cartesian_vector(double psi,double theta)
-{
-	// Clear the vector before filling it in
-	for(int i=0;i<3;++i)
-	{
-		CartMat[i][0] = 0;
-	}
-	CartMat[0][0] = sin(theta) * cos(psi);
-	CartMat[1][0] = sin(theta) * sin(psi);
-	CartMat[2][0] = cos(theta);
-}
-
-
-
-*/
