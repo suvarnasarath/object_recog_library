@@ -2,14 +2,16 @@
 #include "detection.h"
 
 #define MAX_SAMPLES (256)
-#define PI (3.14159265)
+#define PI          (3.14159265)
+#define INVALID     (32767)  // some large number
 using namespace cv;
 
 // Globals
 RNG rng(12345);  // Don't panic, used only for color display
 int kernel_size = 3;
 
-bool bPrintDebugMsg = false;
+// Set debug messages OFF by default
+bool bPrintDebugMsg = true; // Turn OFF later
 
 cv::Mat Input_image;
 
@@ -22,8 +24,9 @@ typedef struct
 	unsigned int y;
 }PIXEL;
 
-void get_world_pos(unsigned int cameraId, PIXEL &pos);
-void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &psi, double &theta);
+// Lookup to store world positions
+std::vector<PIXEL> WORLD_LOOKUP;
+
 /*
  * Definition of input sample
  * @ id : Id of the sample
@@ -44,20 +47,6 @@ typedef struct
 	bool isValid;  // Should we check for this sample in out detector
 }REGISTERED_SAMPLE;
 
-/*
- * To get rid of the annoying eclipse high-lighting problem
- */
-/*
-#ifndef DETECTED_SAMPLE
-	typedef struct
-	{
-		unsigned int id;
-		double x;
-		double y;
-		double projected_width;
-	}DETECTED_SAMPLE;
-#endif
-*/
 /*
  * Definition of camera platform specs
  * @ height: Height of the camera from ground plane
@@ -80,6 +69,9 @@ std::vector<REGISTERED_SAMPLE> registered_sample;
 std::vector<DETECTED_SAMPLE> detected_samples;
 std::vector<platform_camera_parameters>camera_parameters;
 
+/*
+ * When enabled, prints debugging messages
+ */
 void Set_debug(bool enable)
 {
 	bPrintDebugMsg = enable;
@@ -90,9 +82,8 @@ void Set_debug(bool enable)
 }
 
 /*
- * registers a sample
+ * registers a sample to the database
  */
-
 void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std::vector<int>&hsv_max, double min_width, double max_width, double min_height, double max_height)
 {
 	REGISTERED_SAMPLE new_sample;
@@ -106,7 +97,7 @@ void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std
 	new_sample.isValid = true; // true by default for all samples
 
 	registered_sample.push_back(new_sample);
-	std::cout<<"added new sample Id = " << Id << std::endl;
+	if(bPrintDebugMsg) std::cout<<"added new sample Id = " << Id << std::endl;
 }
 
 void register_camera(unsigned int camera_id, double camera_height, double camera_pitch,
@@ -127,7 +118,7 @@ void register_camera(unsigned int camera_id, double camera_height, double camera
 
 		camera_parameters.push_back(camera_spec);
 	} else {
-		std::cout <<"WARNING: Library supports only one camera for now" << std::endl;
+		if(bPrintDebugMsg) std::cout <<"WARNING: Library supports only one camera for now" << std::endl;
 	}
 }
 
@@ -138,12 +129,77 @@ int get_registered_sample_size()
 
 void set_sample_filter(const std::vector<unsigned int> &filter)
 {
-	// Todo: implement filter valid samples
+	// Todo: implement filter to valid samples
+}
+
+
+/*
+ * Gives the world position of a pixel
+ * @ pos	  : Location of the desired pixel
+ * @ camera ID: Assuming that there is only 1 camera for now
+ */
+PIXEL get_world_pos(unsigned int cameraId, PIXEL pos)
+{
+	PIXEL world_pos = {INVALID,INVALID};
+	// Check if the pixel is within the range
+	if(pos.x < camera_parameters[cameraId].Hpixels && pos.y > camera_parameters[cameraId].Vpixels)
+	{
+		world_pos = WORLD_LOOKUP[pos.x*camera_parameters[cameraId].Hpixels+pos.y];
+	} else {
+		if(bPrintDebugMsg) 	std::cout << "image pixel out of range "<< std::endl;
+	}
+	return world_pos;
+}
+
+void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &psi, double &theta)
+{
+	psi =   (1/camera_parameters[0].Hpixels)*(pixel_pos.x * camera_parameters[0].HFov);
+	theta = (1/camera_parameters[0].Vpixels)*(pixel_pos.y * camera_parameters[0].VFov);
+}
+
+/*
+ * This function pre-computes the distances for each pixel
+ */
+void precompute_world_pos_lookup(unsigned int cameraId, cv::Mat &distance)
+{
+	PIXEL pixel_pos, world_pos;
+	double psi, theta, R;
+	double alpha = camera_parameters[cameraId].pitch;
+
+	for(int i =0; i < camera_parameters[cameraId].Hpixels; ++i)
+	{
+		for(int j =0; j < camera_parameters[cameraId].Vpixels; ++j)
+		{
+			pixel_pos.x = i-(camera_parameters[cameraId].Hpixels/2);
+			pixel_pos.y = j-(camera_parameters[cameraId].Vpixels/2);
+
+			calculate_pixel_attitude_and_azimuth(pixel_pos, psi, theta);
+			double c_x = cos(alpha)*sin(theta)*cos(psi) - sin(alpha)*cos(theta);
+			double c_y = sin(theta)*cos(psi);
+			double c_z = sin(alpha)*sin(theta)*cos(psi) + cos(alpha)*cos(theta);
+
+			if(c_z)
+			{
+				R = -(alpha)/c_z;
+				world_pos.x = -R*c_x;
+				world_pos.y = -R*c_y;
+			} else {
+				if(bPrintDebugMsg){
+					std::cout << "image pixel out of range "<< std::endl;
+				}
+				world_pos.x = INVALID;
+				world_pos.y = INVALID;
+			}
+			WORLD_LOOKUP.push_back(world_pos);
+		}
+	}
 }
 
 bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
 {    
 	DETECTED_SAMPLE sample;
+	PIXEL Center; //center of the bounding box;
+	PIXEL World;
 	// sample index is same for all samples this call
 	sample.id = index;
 
@@ -170,9 +226,10 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
      {
         approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
         boundRect[i] = boundingRect( Mat(contours_poly[i]) );
-        // Get world pos
-        //get_world_pos();
-        //detected_samples.push_back(sample);
+        // Get the pixel coordinates and return (x,y) from the lookup
+        Center.x = boundRect[i].tl().x + boundRect[i].br().x;
+        Center.y = boundRect[i].tl().y + boundRect[i].br().y;
+        World = get_world_pos(0,Center);
      }
    
     // Print the number of samples found
@@ -221,20 +278,12 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 }
 
 
+
+
+
+
+
 /*
- * Gives the world position of a pixel
- * @ pos	  : Location of the desired pixel
- * @ camera ID: Assuming that there is only 1 camera for now
- */
-void get_world_pos(unsigned int cameraId, PIXEL &pos)
-{
-	// Check if the pixel is within the range
-	if(pos.x < camera_parameters[cameraId].Hpixels && pos.y > camera_parameters[cameraId].Vpixels)
-	{
-
-	}
-}
-
 double RotationMatrix[3][3];
 double CartMat[3][1];
 double HeightMat[3][1];
@@ -264,7 +313,7 @@ void Compute_rotation_height_matrix(double pitch, double height)
  * @ MatA: Input matrix A
  * @ MatB: Input matrix B
  * @ Prod: Output matrix
- */
+ *
 void Multiply(const double (&matA)[3][3], const double (&matB)[3][1], double (&Product)[3][1])
 {
 	for(int i=0;i<3;++i)
@@ -299,47 +348,6 @@ void compute_cartesian_vector(double psi,double theta)
 	CartMat[2][0] = cos(theta);
 }
 
-void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &psi, double &theta)
-{
-	psi =   (1/camera_parameters[0].Hpixels)*(pixel_pos.x * camera_parameters[0].HFov);
-	theta = (1/camera_parameters[0].Vpixels)*(pixel_pos.y * camera_parameters[0].VFov);
-}
-
-/*
- * This function pre-computes the distances for each pixel
- */
-void precompute_world_pos_lookup(unsigned int cameraId, cv::Mat &distance)
-{
-	PIXEL pos;
-	double psi, theta;
-	double alpha = camera_parameters[cameraId].pitch;
-	double ray[3][1];
-
-	/*
-	 * Setup rotation matrix
-	 */
-	Compute_rotation_height_matrix(camera_parameters[cameraId].pitch,camera_parameters[cameraId].height);
-
-	for(int i =0; i < camera_parameters[cameraId].Hpixels; ++i)
-	{
-		for(int j =0; j < camera_parameters[cameraId].Vpixels; ++j)
-		{
-			pos.x = i;	pos.y = j;
-			calculate_pixel_attitude_and_azimuth(pos, psi, theta);
-			compute_cartesian_vector(psi,theta);
-			Multiply(RotationMatrix,CartMat,Out);
-			Add(HeightMat, Out,ray);
-			// print ray for debugging
-			for(int i=0;i<3;++i)
-			{
-				std::cout << ray[i] << std::endl;
-			}
-		}
-	}
-}
 
 
-
-
-
-
+*/
