@@ -228,7 +228,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     std::vector<vector<Point> > contours_poly( contours.size() );
     std::vector<Rect> boundRect( contours.size() );
     for( int i = 0; i < contours.size(); ++i)
-     {o
+     {
         approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
         boundRect[i] = boundingRect( Mat(contours_poly[i]) );
         // Get the pixel coordinates and return (x,y) from the lookup
