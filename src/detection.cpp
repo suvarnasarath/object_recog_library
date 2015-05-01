@@ -62,23 +62,7 @@ typedef struct
 	bool isValid;  // Should we check for this sample in out detector
 }REGISTERED_SAMPLE;
 
-/*
- * Definition of camera platform specs
- * @ height: Height of the camera from ground plane
- * @ pitch : Pitch of the camera
- * @ HFov  : Horizontal field of view of the camera lense
- * @ VFov  : Vertical field of view of the camera lense
- */
-typedef struct
-{
-	unsigned int camera_Id; // camera number
-	double height; // height of the camera from ground plane
-	double pitch;  // Pitch angle of the camera (up from down)
-	double HFov;   // Horizontal field of view
-	double VFov;   // Vertical field of view
-	unsigned int Hpixels;
-	unsigned int Vpixels;
-}platform_camera_parameters;
+
 
 std::vector<REGISTERED_SAMPLE> registered_sample;
 std::vector<DETECTED_SAMPLE> detected_samples;
@@ -191,29 +175,16 @@ void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std
 	if(bPrintDebugMsg) std::cout<<"added new sample Id = " << Id << std::endl;
 }
 
-void register_camera(unsigned int camera_id, double camera_height, double camera_pitch,
-						double camera_HFov, double camera_VFov, unsigned int Hpixels, unsigned int Vpixels)
+void register_camera(unsigned int camera_id, const platform_camera_parameters * param)
 {
-	platform_camera_parameters camera_spec;
-
 	// Supports only one camera at this time.
 	if(camera_parameters.size() < 1)
 	{
-		camera_spec.camera_Id = camera_id;
-		camera_spec.height = camera_height;
-		camera_spec.pitch = camera_pitch;
-		camera_spec.HFov = camera_HFov;
-		camera_spec.VFov = camera_VFov;
-		camera_spec.Hpixels = Hpixels;
-		camera_spec.Vpixels = Vpixels;
-
-		camera_parameters.push_back(camera_spec);
+		camera_parameters.push_back(*param);
 		precompute_world_pos_lookup(camera_id);
 	} else {
 		if(bPrintDebugMsg) std::cout <<"WARNING: Library supports only one camera for now" << std::endl;
 	}
-
-
 }
 
 int get_registered_sample_size()

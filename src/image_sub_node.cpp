@@ -36,8 +36,18 @@ int main(int argc, char **argv)
 {
 
 	  // Register camera
-	std::cout << "in main() "<< std::endl;
-	  register_camera(0,0.71,0,1.3962634,0.7853981625,1280,720);
+	platform_camera_parameters param;
+	param.height = 0.71; // height of the camera from ground plane
+	param.pitch = 0;  // Pitch angle of the camera (up from down)
+	param.HFov = 1.3962634;   // Horizontal field of view
+	param.VFov = 0.7853981625;   // Vertical field of view
+	param.Hpixels = 1280;
+	param.Vpixels = 720;
+	param.max_detection_dist = 5.0;
+	param.x_offset = 0.0;
+	param.y_offset = 0.0;
+	param.yaw = 0.0;
+	register_camera(0,&param);
 /*
   ros::init(argc, argv, "image_listener");
   ros::NodeHandle nh;
