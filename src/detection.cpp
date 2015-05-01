@@ -93,10 +93,13 @@ void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &elevation, do
 void precompute_world_pos_lookup(unsigned int cameraId)
 {
 	PIXEL pixel_pos;
-	WORLD world_pos;
+	WORLD world_pos, world_pos_copy;
 	double elevation, azimuth, R;
 	double c_x,c_y,c_z;
 	double alpha = camera_parameters[cameraId].pitch;
+
+	double c_theta = cos(camera_parameters[cameraId].yaw);
+	double s_theta = sin(camera_parameters[cameraId].yaw);
 
 	bool print = false;
 
@@ -126,19 +129,26 @@ void precompute_world_pos_lookup(unsigned int cameraId)
 				R = -(camera_parameters[cameraId].height)/c_z;
 				double next_x = R * c_x;
 				double next_y = R * c_y;
-				if(next_x*next_x + next_y*next_y > DEFAULT_MAX_DIST*DEFAULT_MAX_DIST)
+				if(next_x*next_x + next_y*next_y > camera_parameters[cameraId].max_detection_dist*camera_parameters[cameraId].max_detection_dist)
 				{
-					world_pos.x = DEFAULT_MAX_DIST * c_x;
-					world_pos.y = DEFAULT_MAX_DIST * c_y;
+					world_pos.x = camera_parameters[cameraId].max_detection_dist * c_x;
+					world_pos.y = camera_parameters[cameraId].max_detection_dist * c_y;
 				} else {
 					world_pos.x = next_x;
 					world_pos.y = next_y;
 				}
 			} else {
 
-				world_pos.x = DEFAULT_MAX_DIST * c_x;
-				world_pos.y = DEFAULT_MAX_DIST * c_y;
+				world_pos.x = camera_parameters[cameraId].max_detection_dist * c_x;
+				world_pos.y = camera_parameters[cameraId].max_detection_dist * c_y;
 			}
+			world_pos_copy = world_pos;
+			// Offset for camera pos wrt robot pos
+			world_pos.x = camera_parameters[cameraId].x_offset +
+							(c_theta*world_pos_copy.x - s_theta*world_pos_copy.y) ;
+			world_pos.y = camera_parameters[cameraId].y_offset +
+							(s_theta*world_pos_copy.x + c_theta*world_pos_copy.y) ;
+
 
 			if(print) {
 				std::cout << "pixel_pos.u : "<< pixel_pos.u << std::endl;
