@@ -13,8 +13,8 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 		  const cv::Mat * imagePtr = &(cv_ptr->image);
 
 		  cv::Mat out_image;
-		  //DETECTED_SAMPLE found_sample;
-		  //found_sample = find_objects(imagePtr,std::vector<DETECTED_SAMPLE> &detected_samples);
+		  std::vector<DETECTED_SAMPLE> detected_samples;
+		  find_objects(imagePtr,0,detected_samples);
 		  sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", out_image).toImageMsg();
 		  pub.publish(msg);
 	  } catch (cv_bridge::Exception& e) {
@@ -34,17 +34,23 @@ void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S
 
 int main(int argc, char **argv)
 {
+
+	  // Register camera
+	std::cout << "in main() "<< std::endl;
+	  register_camera(0,0.71,0,1.3962634,0.7853981625,1280,720);
+/*
   ros::init(argc, argv, "image_listener");
   ros::NodeHandle nh;
   ros::NodeHandle np("~");
   std::string topic;
 
+
+  // Register samples
   AddSampleforDetection(1,165,50,50,175,255,255,1,1,1,1); // Red hockey puck
   AddSampleforDetection(2,20,50,50,30,255,255,1,1,1,1);   // Yellow PVC pipe
   AddSampleforDetection(3,5,50,50,15,255,255,1,1,1,1);    // Orange PVC pipe
   AddSampleforDetection(4,90,60,60,110,255,255,1,1,1,1);  // White hooked sample
   AddSampleforDetection(5,0,50,50,5,255,255,1,1,1,1);     // Pink Tennis Ball
-
   std::cout << "sample size = " << get_registered_sample_size() << std::endl;
 
   if(!np.getParam("topic",topic))
@@ -55,4 +61,6 @@ int main(int argc, char **argv)
   image_transport::Subscriber sub = it.subscribe(topic, 1, imageCallback);
   pub = it.advertise("chatter",1);
   ros::spin();
+  */
+	  return 0;
 }

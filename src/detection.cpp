@@ -7,6 +7,7 @@ using namespace cv;
 #define PI          (3.14159265)
 #define INVALID     (32767)  // some large number
 #define DEFAULT_CAMERAID (0)
+#define DEFAULT_MAX_DIST (5.0)
 
 
 // Globals
@@ -21,16 +22,25 @@ bool bPrintDebugMsg = true; // Turn OFF later
 cv::Mat Input_image;
 
 /*
- * pixel definition
+ * pixel coordinates
  */
 typedef struct
 {
-	unsigned int x;
-	unsigned int y;
+	double u;
+	double v;
 }PIXEL;
 
+/*
+ * world coordinates
+ */
+typedef struct
+{
+	double x;
+	double y;
+}WORLD;
+
 // Lookup to store world positions
-std::vector<PIXEL> WORLD_LOOKUP;
+std::vector<WORLD> WORLD_LOOKUP;
 
 /*
  * Definition of input sample
@@ -86,6 +96,82 @@ void Set_debug(bool enable)
 	}
 }
 
+void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &elevation, double &azimuth)
+{
+	azimuth   = (pixel_pos.u * camera_parameters[DEFAULT_CAMERAID].HFov)/static_cast<double>(camera_parameters[DEFAULT_CAMERAID].Hpixels);
+	elevation = (pixel_pos.v * camera_parameters[DEFAULT_CAMERAID].VFov)/static_cast<double>(camera_parameters[DEFAULT_CAMERAID].Vpixels);
+}
+
+#define Epsilon 0.001
+/*
+ * This function pre-computes the distances for each pixel
+ */
+void precompute_world_pos_lookup(unsigned int cameraId)
+{
+	PIXEL pixel_pos;
+	WORLD world_pos;
+	double elevation, azimuth, R;
+	double c_x,c_y,c_z;
+	double alpha = camera_parameters[cameraId].pitch;
+
+	bool print = false;
+
+	for(int i =0; i < camera_parameters[cameraId].Hpixels; ++i)
+	{
+		for(int j =0; j < camera_parameters[cameraId].Vpixels; ++j)
+		{
+			if(((i == 0) && (j == 0)) ||
+			   ((i == camera_parameters[cameraId].Hpixels-1) && (j == 0)) ||
+			   ((i == 0) && (j == camera_parameters[cameraId].Vpixels-1)) ||
+			   ((i == camera_parameters[cameraId].Hpixels-1) && (j == camera_parameters[cameraId].Vpixels-1)) )
+			{
+				std::cout << "i: " << i << "j: " << j<< std::endl;
+				print = true;
+			}
+			pixel_pos.u = static_cast<double>(camera_parameters[cameraId].Hpixels/2) - i;
+			pixel_pos.v = static_cast<double>(camera_parameters[cameraId].Vpixels/2) - j;
+
+			calculate_pixel_attitude_and_azimuth(pixel_pos, elevation, azimuth);
+
+			double c_x = cos(alpha)*cos(elevation)*cos(azimuth) + sin(alpha)*sin(elevation);
+			double c_y = cos(elevation)*sin(azimuth);
+			double c_z = -sin(alpha)*cos(elevation)*cos(azimuth) + cos(alpha)*sin(elevation);
+
+			if(c_z < Epsilon)
+			{
+				R = -(camera_parameters[cameraId].height)/c_z;
+				double next_x = R * c_x;
+				double next_y = R * c_y;
+				if(next_x*next_x + next_y*next_y > DEFAULT_MAX_DIST*DEFAULT_MAX_DIST)
+				{
+					world_pos.x = DEFAULT_MAX_DIST * c_x;
+					world_pos.y = DEFAULT_MAX_DIST * c_y;
+				} else {
+					world_pos.x = next_x;
+					world_pos.y = next_y;
+				}
+			} else {
+
+				world_pos.x = DEFAULT_MAX_DIST * c_x;
+				world_pos.y = DEFAULT_MAX_DIST * c_y;
+			}
+
+			if(print) {
+				std::cout << "pixel_pos.u : "<< pixel_pos.u << std::endl;
+				std::cout << "pixel_pos.v : "<< pixel_pos.v << std::endl;
+				std::cout << "C_X: "<< c_x << std::endl;
+				std::cout << "C_Y: "<< c_y << std::endl;
+				std::cout << "C_Z: "<< c_z << std::endl;
+				std::cout << "R: "<< R << std::endl;
+				std::cout << "X:  "<< world_pos.x << " " << "Y:  "<< world_pos.y << std::endl;
+				print = false;
+			}
+
+			WORLD_LOOKUP.push_back(world_pos);
+		}
+	}
+}
+
 /*
  * registers a sample to the database
  */
@@ -122,9 +208,12 @@ void register_camera(unsigned int camera_id, double camera_height, double camera
 		camera_spec.Vpixels = Vpixels;
 
 		camera_parameters.push_back(camera_spec);
+		precompute_world_pos_lookup(camera_id);
 	} else {
 		if(bPrintDebugMsg) std::cout <<"WARNING: Library supports only one camera for now" << std::endl;
 	}
+
+
 }
 
 int get_registered_sample_size()
@@ -143,68 +232,24 @@ void set_sample_filter(const std::vector<unsigned int> &filter)
  * @ pos	  : Location of the desired pixel
  * @ camera ID: Assuming that there is only 1 camera for now
  */
-PIXEL get_world_pos(unsigned int cameraId, PIXEL pos)
+WORLD get_world_pos(unsigned int cameraId, PIXEL pos)
 {
-	PIXEL world_pos = {INVALID,INVALID};
+	WORLD world_pos = {INVALID,INVALID};
 	// Check if the pixel is within the range
-	if(pos.x < camera_parameters[cameraId].Hpixels && pos.y > camera_parameters[cameraId].Vpixels)
+	if(pos.u < camera_parameters[cameraId].Hpixels && pos.v > camera_parameters[cameraId].Vpixels)
 	{
-		world_pos = WORLD_LOOKUP[pos.x*camera_parameters[cameraId].Hpixels+pos.y];
+		world_pos = WORLD_LOOKUP[pos.u*camera_parameters[cameraId].Hpixels+pos.v];
 	} else {
 		if(bPrintDebugMsg) 	std::cout << "image pixel out of range "<< std::endl;
 	}
 	return world_pos;
 }
 
-void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &psi, double &theta)
-{
-	psi =   (1/camera_parameters[DEFAULT_CAMERAID].Hpixels)*(pixel_pos.x * camera_parameters[DEFAULT_CAMERAID].HFov);
-	theta = (1/camera_parameters[DEFAULT_CAMERAID].Vpixels)*(pixel_pos.y * camera_parameters[DEFAULT_CAMERAID].VFov);
-}
-
-/*
- * This function pre-computes the distances for each pixel
- */
-void precompute_world_pos_lookup(unsigned int cameraId)
-{
-	PIXEL pixel_pos, world_pos;
-	double psi, theta, R;
-	double alpha = camera_parameters[cameraId].pitch;
-
-	for(int i =0; i < camera_parameters[cameraId].Hpixels; ++i)
-	{
-		for(int j =0; j < camera_parameters[cameraId].Vpixels; ++j)
-		{
-			pixel_pos.x = i-(camera_parameters[cameraId].Hpixels/2);
-			pixel_pos.y = j-(camera_parameters[cameraId].Vpixels/2);
-
-			calculate_pixel_attitude_and_azimuth(pixel_pos, psi, theta);
-			double c_x = cos(alpha)*sin(theta)*cos(psi) - sin(alpha)*cos(theta);
-			double c_y = sin(theta)*cos(psi);
-			double c_z = sin(alpha)*sin(theta)*cos(psi) + cos(alpha)*cos(theta);
-
-			if(c_z)
-			{
-				R = -(alpha)/c_z;
-				world_pos.x = -R*c_x;
-				world_pos.y = -R*c_y;
-			} else {
-				if(bPrintDebugMsg){
-					std::cout << "image pixel out of range "<< std::endl;
-				}
-				world_pos.x = INVALID;
-				world_pos.y = INVALID;
-			}
-			WORLD_LOOKUP.push_back(world_pos);
-		}
-	}
-}
-
 bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
 {    
 	DETECTED_SAMPLE sample;
 	PIXEL Center; //center of the bounding box;
-	PIXEL World;
+	WORLD World;
 	// sample index is same for all samples this call
 	sample.id = index;
 
@@ -232,8 +277,8 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
         approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
         boundRect[i] = boundingRect( Mat(contours_poly[i]) );
         // Get the pixel coordinates and return (x,y) from the lookup
-        Center.x = boundRect[i].tl().x + boundRect[i].br().x;
-        Center.y = boundRect[i].tl().y + boundRect[i].br().y;
+        Center.u = boundRect[i].tl().x + boundRect[i].br().x;
+        Center.v = boundRect[i].tl().y + boundRect[i].br().y;
         World = get_world_pos(DEFAULT_CAMERAID,Center);
         sample.x = World.x;
         sample.y = World.y;
@@ -266,12 +311,6 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 	if(! imgPtr->data) {
 		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
-	}
-
-	if(!bInit)
-	{
-		precompute_world_pos_lookup(DEFAULT_CAMERAID);
-		bInit = true;
 	}
 
 	Input_image = *imgPtr;
