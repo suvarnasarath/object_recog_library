@@ -339,10 +339,11 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
 		   // Draw a bounding box
 		   rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(), (0,0,255), 2, 8, 0 );
 		 }
+		 *out_image = Input_image;
     } else {
     	if(bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
     }
-    *out_image = Input_image;
+
     return true;
 }
 
@@ -353,6 +354,7 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
 	}
+
 
 	Input_image = *imgPtr;
 
