@@ -16,7 +16,7 @@ int kernel_size = 3;
 // Init flag
 bool bInit = false;
 // Set debug messages OFF by default
-bool bPrintDebugMsg = true; // Turn OFF later
+LOGLEVEL bPrintDebugMsg = OFF; // Turn OFF later
 
 cv::Mat Input_image;
 
@@ -70,10 +70,10 @@ std::vector<platform_camera_parameters>camera_parameters;
 /*
  * When enabled, prints debugging messages
  */
-void Set_debug(bool enable)
+void Set_debug(LOGLEVEL level)
 {
-	bPrintDebugMsg = enable;
-	if(bPrintDebugMsg)
+	bPrintDebugMsg = level;
+	if(bPrintDebugMsg > OFF)
 	{
 		std::cout << "Debug messages enabled:" << std::endl;
 	}
@@ -140,7 +140,7 @@ void precompute_world_lookup(unsigned int cameraId)
 							(s_theta*world_pos_copy.x + c_theta*world_pos_copy.y) ;
 
 			/*** Debug Print ****/
-			if(bPrintDebugMsg)
+			if(bPrintDebugMsg == VERBOSE)
 			{
 				if(((i == 0) && (j == 0)) ||
 				   ((i == camera_parameters[cameraId].Hpixels-1) && (j == 0)) ||
@@ -179,7 +179,7 @@ void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std
 	new_sample.isValid = true; // true by default for all samples
 
 	registered_sample.push_back(new_sample);
-	if(bPrintDebugMsg) std::cout<<"added new sample Id = " << Id << std::endl;
+	if(bPrintDebugMsg > ERROR) std::cout<<"added new sample Id = " << Id << std::endl;
 }
 
 void register_camera(unsigned int camera_id, const platform_camera_parameters * param)
@@ -190,7 +190,7 @@ void register_camera(unsigned int camera_id, const platform_camera_parameters * 
 		camera_parameters.push_back(*param);
 		precompute_world_lookup(camera_id);
 	} else {
-		if(bPrintDebugMsg) std::cout <<"WARNING: Library supports only one camera for now" << std::endl;
+		if(bPrintDebugMsg > DEBUG) std::cout <<"WARNING: Library supports only one camera for now" << std::endl;
 	}
 }
 
@@ -303,14 +303,18 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
         sample.y = world_cntr_btm.y;
         sample.projected_width = abs(world_right_btm.x - world_left_btm.x);
 
-        std::cout << "sample X:  "<< sample.x << std::endl;
-        std::cout << "sample Y:  "<< sample.y << std::endl;
+        //if(bPrintDebugMsg > OFF)
+        //{
+        	std::cout << "sample X:  "<< sample.x << std::endl;
+        	std::cout << "sample Y:  "<< sample.y << std::endl;
+        //}
+
         // Push the sample
         detected_samples.push_back(sample);
      }
    
     // Print the number of samples found
-    if(bPrintDebugMsg)
+    if(bPrintDebugMsg > ERROR)
     	std::cout << "Number of samples found: "<< contours.size()<< std::endl;
 
     // Fill the output image with bounding boxes if not NULL
@@ -327,7 +331,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
 		   rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(), (0,0,255), 2, 8, 0 );
 		 }
     } else {
-    	std::cout << "img ptr null" << std::endl;
+    	if(bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
     }
     *out_image = Input_image;
     return true;

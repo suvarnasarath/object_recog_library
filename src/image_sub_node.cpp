@@ -35,7 +35,8 @@ void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S
 
 int main(int argc, char **argv)
 {
-	//Set_debug(false);
+	// Turn off debug messages.
+	Set_debug(OFF);
 	/*******************************/
 	/******** Register camera ******/
 	/*******************************/

@@ -8,6 +8,18 @@
 #include <vector>
 
 /*
+ *
+ */
+
+typedef enum
+{
+	OFF,
+	ERROR,
+	DEBUG,
+	VERBOSE
+}LOGLEVEL;
+
+/*
  * Definition of output sample
  * @ id : Id of the sample
  * @ x,y: position in world coordinates.
@@ -47,6 +59,6 @@ void register_sample(unsigned int Id, const std::vector<int>&hsv_min, const std:
 void register_camera(unsigned int camera_id, const platform_camera_parameters * param);
 int  get_registered_sample_size();
 void set_sample_filter(const std::vector<unsigned int> &filter);
-void Set_debug(bool enable);
+void Set_debug(LOGLEVEL level );
 
 #endif
