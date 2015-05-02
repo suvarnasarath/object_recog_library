@@ -301,12 +301,21 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
         // These will be used to get the center and the width of the detected sample in world frame.
         sample.x = world_cntr_btm.x;
         sample.y = world_cntr_btm.y;
-        sample.projected_width = abs(world_right_btm.x - world_left_btm.x);
+
+        if(bPrintDebugMsg > OFF)
+        {
+			std::cout << "world_right_btm Y:  "<< world_right_btm.y << std::endl;
+			std::cout << "world_left_btm  Y:  "<< world_left_btm.y << std::endl;
+			std::cout << "diff  Y:  "<< world_right_btm.y - world_left_btm.y << std::endl;
+        }
+
+        sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
 
         //if(bPrintDebugMsg > OFF)
         //{
         	std::cout << "sample X:  "<< sample.x << std::endl;
         	std::cout << "sample Y:  "<< sample.y << std::endl;
+        	std::cout << "sample width:  "<< sample.projected_width << std::endl;
         //}
 
         // Push the sample
