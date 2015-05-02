@@ -73,7 +73,7 @@ std::vector<platform_camera_parameters>camera_parameters;
 void Set_debug(LOGLEVEL level)
 {
 	bPrintDebugMsg = level;
-	if(bPrintDebugMsg > OFF)
+	if(bPrintDebugMsg > DEBUG)
 	{
 		std::cout << "Debug messages enabled:" << std::endl;
 	}
@@ -302,7 +302,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
         sample.x = world_cntr_btm.x;
         sample.y = world_cntr_btm.y;
 
-        if(bPrintDebugMsg > OFF)
+        if(bPrintDebugMsg > DEBUG)
         {
 			std::cout << "world_right_btm Y:  "<< world_right_btm.y << std::endl;
 			std::cout << "world_left_btm  Y:  "<< world_left_btm.y << std::endl;
@@ -311,7 +311,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
 
         sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
 
-        if(bPrintDebugMsg > OFF)
+        if(bPrintDebugMsg > ERROR)
         {
         	std::cout << "sample X:  "<< sample.x << std::endl;
         	std::cout << "sample Y:  "<< sample.y << std::endl;
