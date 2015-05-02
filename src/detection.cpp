@@ -311,12 +311,12 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
 
         sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
 
-        //if(bPrintDebugMsg > OFF)
-        //{
+        if(bPrintDebugMsg > OFF)
+        {
         	std::cout << "sample X:  "<< sample.x << std::endl;
         	std::cout << "sample Y:  "<< sample.y << std::endl;
         	std::cout << "sample width:  "<< sample.projected_width << std::endl;
-        //}
+        }
 
         // Push the sample
         detected_samples.push_back(sample);
