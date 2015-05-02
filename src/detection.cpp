@@ -5,7 +5,6 @@ using namespace cv;
 
 #define MAX_SAMPLES (256)
 #define PI          (3.14159265)
-#define INVALID     (32767)  // some large number
 #define DEFAULT_CAMERAID (0)
 #define DEFAULT_MAX_DIST (5.0)
 
@@ -211,13 +210,18 @@ void set_sample_filter(const std::vector<unsigned int> &filter)
  * @ pos	  : Location of the desired pixel
  * @ camera ID: Assuming that there is only 1 camera for now
  */
-WORLD get_world_pos(unsigned int cameraId, PIXEL pos)
+WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 {
-	WORLD world_pos = {INVALID,INVALID};
+	WORLD world_pos = {DEFAULT_MAX_DIST,DEFAULT_MAX_DIST};
+	int index = 0;
 	// Check if the pixel is within the range
-	if(pos.u < camera_parameters[cameraId].Hpixels && pos.v > camera_parameters[cameraId].Vpixels)
+	if(pos.u < camera_parameters[cameraId].Hpixels && pos.v < camera_parameters[cameraId].Vpixels)
 	{
-		world_pos = WORLD_LOOKUP[pos.u*camera_parameters[cameraId].Hpixels+pos.v];
+		index = pos.u*camera_parameters[cameraId].Vpixels + pos.v;
+		//std::cout << "U: "<< pos.u << std::endl;
+		//std::cout << "V: "<< pos.v << std::endl;
+		//std::cout << "Index: "<< index << std::endl;
+		world_pos = WORLD_LOOKUP[index];
 	} else {
 		if(bPrintDebugMsg) 	std::cout << "image pixel out of range "<< std::endl;
 	}
@@ -255,24 +259,39 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     std::vector<Rect> boundRect(contours.size() );
     for( int i = 0; i < contours.size(); ++i)
      {
-        approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
-        boundRect[i] = boundingRect( Mat(contours_poly[i]) );
+    	const std::vector<Point> & countour = contours_poly[i];
+
+        approxPolyDP( Mat(contours[i]), contours_poly[i], 5, false );
+        //boundRect[i] = boundingRect( Mat(contours_poly[i]) );
+        boundRect[i] = boundingRect( Mat(contours[i]) );
+
 
         // Get the pixel coordinates of the rectangular bounding box
         Point tl = boundRect[i].tl();
         Point br = boundRect[i].br();
 
+        //std::cout << "TL: "<<tl.x << " "<< tl.y << std::endl;
+        //std::cout << "BR: "<<br.x << " "<< br.y << std::endl;
+
         // Mid point of the bounding box bottom side
         pxl_cntr_btm.u = (tl.x + br.x)/2;
         pxl_cntr_btm.v = br.y;
 
+        //std::cout << "pxl_cntr_btm X:  "<< pxl_cntr_btm.u << std::endl;
+        //std::cout << "pxl_cntr_btm Y:  "<< pxl_cntr_btm.v << std::endl;
+
         // Left point of the bounding box bottom side
         pxl_left_btm.u = tl.x;
         pxl_left_btm.v = br.y;
+        //std::cout << "pxl_left_btm X:  "<< pxl_left_btm.u << std::endl;
+        //std::cout << "pxl_left_btm Y:  "<< pxl_left_btm.v << std::endl;
 
         // Left point of the bounding box bottom side
         pxl_right_btm.u = br.x;
         pxl_right_btm.v = br.y;
+
+        //std::cout << "pxl_right_btm X:  "<< pxl_right_btm.u << std::endl;
+        //std::cout << "pxl_right_btm Y:  "<< pxl_right_btm.v << std::endl;
 
         // Get world position of the above 3 pixels in world
         world_cntr_btm  = get_world_pos(DEFAULT_CAMERAID,pxl_cntr_btm);
@@ -282,8 +301,10 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
         // These will be used to get the center and the width of the detected sample in world frame.
         sample.x = world_cntr_btm.x;
         sample.y = world_cntr_btm.y;
-        sample.projected_width = (world_right_btm.x - world_left_btm.x);
+        sample.projected_width = abs(world_right_btm.x - world_left_btm.x);
 
+        std::cout << "sample X:  "<< sample.x << std::endl;
+        std::cout << "sample Y:  "<< sample.y << std::endl;
         // Push the sample
         detected_samples.push_back(sample);
      }
@@ -303,9 +324,12 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
 		   drawContours( drawing, contours_poly, i, color, 2, 8, hierarchy, 0, Point() );
 
 		   // Draw a bounding box
-		   rectangle(*out_image, boundRect[i].tl(), boundRect[i].br(), (0,0,255), 2, 8, 0 );
+		   rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(), (0,0,255), 2, 8, 0 );
 		 }
+    } else {
+    	std::cout << "img ptr null" << std::endl;
     }
+    *out_image = Input_image;
     return true;
 }
 
