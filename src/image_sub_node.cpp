@@ -34,8 +34,9 @@ void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S
 
 int main(int argc, char **argv)
 {
-
-	  // Register camera
+	/*******************************/
+	/******** Register camera ******/
+	/*******************************/
 	platform_camera_parameters param;
 	param.height = 0.71; // height of the camera from ground plane
 	param.pitch = 0;  // Pitch angle of the camera (up from down)
@@ -46,31 +47,34 @@ int main(int argc, char **argv)
 	param.max_detection_dist = 5.0;
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
-	param.yaw = 0.0;
+	param.yaw = 0;
 	register_camera(0,&param);
-/*
-  ros::init(argc, argv, "image_listener");
-  ros::NodeHandle nh;
-  ros::NodeHandle np("~");
-  std::string topic;
+
+	/********************************/
+	/******** Register samples ******/
+	/********************************/
+	AddSampleforDetection(1,165,50,50,175,255,255,1,1,1,1); // Red hockey puck
+	AddSampleforDetection(2,20,50,50,30,255,255,1,1,1,1);   // Yellow PVC pipe
+	AddSampleforDetection(3,5,50,50,15,255,255,1,1,1,1);    // Orange PVC pipe
+	AddSampleforDetection(4,90,60,60,110,255,255,1,1,1,1);  // White hooked sample
+	AddSampleforDetection(5,0,50,50,5,255,255,1,1,1,1);     // Pink Tennis Ball
+	std::cout << "sample size = " << get_registered_sample_size() << std::endl;
 
 
-  // Register samples
-  AddSampleforDetection(1,165,50,50,175,255,255,1,1,1,1); // Red hockey puck
-  AddSampleforDetection(2,20,50,50,30,255,255,1,1,1,1);   // Yellow PVC pipe
-  AddSampleforDetection(3,5,50,50,15,255,255,1,1,1,1);    // Orange PVC pipe
-  AddSampleforDetection(4,90,60,60,110,255,255,1,1,1,1);  // White hooked sample
-  AddSampleforDetection(5,0,50,50,5,255,255,1,1,1,1);     // Pink Tennis Ball
-  std::cout << "sample size = " << get_registered_sample_size() << std::endl;
+	/********************************/
+	/********* Ros node handle ******/
+	/********************************/
+	ros::init(argc, argv, "image_listener");
+	ros::NodeHandle nh;
+	ros::NodeHandle np("~");
+	std::string topic;
 
-  if(!np.getParam("topic",topic))
-  {
-    topic = "camera/image";
-  }
-  image_transport::ImageTransport it(topic);
-  image_transport::Subscriber sub = it.subscribe(topic, 1, imageCallback);
-  pub = it.advertise("chatter",1);
-  ros::spin();
-  */
-	  return 0;
+	if(!np.getParam("topic",topic))
+	{
+	topic = "camera/image";
+	}
+	image_transport::ImageTransport it(topic);
+	image_transport::Subscriber sub = it.subscribe(topic, 1, imageCallback);
+	pub = it.advertise("chatter",1);
+	ros::spin();
 }

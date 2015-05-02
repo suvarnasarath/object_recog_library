@@ -14,10 +14,10 @@
  */
 typedef struct
 {
-	unsigned int id;
-	double x;
-	double y;
-	double projected_width;
+	unsigned int id;	// Sample Id
+	double x;			// Sample world x
+	double y;			// Sample world y
+	double projected_width; // Estimated size of the sample
 }DETECTED_SAMPLE;
 
 /*
@@ -29,17 +29,16 @@ typedef struct
  */
 typedef struct
 {
-	double height; // height of the camera from ground plane
-	double pitch;  // Pitch angle of the camera (up from down)
-	double HFov;   // Horizontal field of view
-	double VFov;   // Vertical field of view
-	unsigned int Hpixels;
-	unsigned int Vpixels;
-	double max_detection_dist;
-	// platform frame
-	double x_offset;
-	double y_offset;
-	double yaw;
+	double height; 			// height of the camera from ground plane
+	double pitch;  			// Pitch angle of the camera (up from down)
+	double HFov;   			// Horizontal field of view
+	double VFov;   			// Vertical field of view
+	unsigned int Hpixels;	// Imager height
+	unsigned int Vpixels;   // Imager width
+	double max_detection_dist; // Maximum distance to detect samples
+	double x_offset;		// Camera x offset w.r.t robot frame
+	double y_offset;		// Camera y offset w.r.t robot frame
+	double yaw;				// Camera yaw offset w.r.t robot frame
 }platform_camera_parameters;
 
 void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples);

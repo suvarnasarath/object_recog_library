@@ -90,7 +90,7 @@ void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &elevation, do
 /*
  * This function pre-computes the distances for each pixel
  */
-void precompute_world_pos_lookup(unsigned int cameraId)
+void precompute_world_lookup(unsigned int cameraId)
 {
 	PIXEL pixel_pos;
 	WORLD world_pos, world_pos_copy;
@@ -101,20 +101,10 @@ void precompute_world_pos_lookup(unsigned int cameraId)
 	double c_theta = cos(camera_parameters[cameraId].yaw);
 	double s_theta = sin(camera_parameters[cameraId].yaw);
 
-	bool print = false;
-
 	for(int i =0; i < camera_parameters[cameraId].Hpixels; ++i)
 	{
 		for(int j =0; j < camera_parameters[cameraId].Vpixels; ++j)
 		{
-			if(((i == 0) && (j == 0)) ||
-			   ((i == camera_parameters[cameraId].Hpixels-1) && (j == 0)) ||
-			   ((i == 0) && (j == camera_parameters[cameraId].Vpixels-1)) ||
-			   ((i == camera_parameters[cameraId].Hpixels-1) && (j == camera_parameters[cameraId].Vpixels-1)) )
-			{
-				std::cout << "i: " << i << "j: " << j<< std::endl;
-				print = true;
-			}
 			pixel_pos.u = static_cast<double>(camera_parameters[cameraId].Hpixels/2) - i;
 			pixel_pos.v = static_cast<double>(camera_parameters[cameraId].Vpixels/2) - j;
 
@@ -129,7 +119,8 @@ void precompute_world_pos_lookup(unsigned int cameraId)
 				R = -(camera_parameters[cameraId].height)/c_z;
 				double next_x = R * c_x;
 				double next_y = R * c_y;
-				if(next_x*next_x + next_y*next_y > camera_parameters[cameraId].max_detection_dist*camera_parameters[cameraId].max_detection_dist)
+				if((next_x*next_x + next_y*next_y) >
+						camera_parameters[cameraId].max_detection_dist*camera_parameters[cameraId].max_detection_dist)
 				{
 					world_pos.x = camera_parameters[cameraId].max_detection_dist * c_x;
 					world_pos.y = camera_parameters[cameraId].max_detection_dist * c_y;
@@ -143,22 +134,29 @@ void precompute_world_pos_lookup(unsigned int cameraId)
 				world_pos.y = camera_parameters[cameraId].max_detection_dist * c_y;
 			}
 			world_pos_copy = world_pos;
-			// Offset for camera pos wrt robot pos
+			// Offset for camera position w.r.t robot position
 			world_pos.x = camera_parameters[cameraId].x_offset +
 							(c_theta*world_pos_copy.x - s_theta*world_pos_copy.y) ;
 			world_pos.y = camera_parameters[cameraId].y_offset +
 							(s_theta*world_pos_copy.x + c_theta*world_pos_copy.y) ;
 
-
-			if(print) {
-				std::cout << "pixel_pos.u : "<< pixel_pos.u << std::endl;
-				std::cout << "pixel_pos.v : "<< pixel_pos.v << std::endl;
-				std::cout << "C_X: "<< c_x << std::endl;
-				std::cout << "C_Y: "<< c_y << std::endl;
-				std::cout << "C_Z: "<< c_z << std::endl;
-				std::cout << "R: "<< R << std::endl;
-				std::cout << "X:  "<< world_pos.x << " " << "Y:  "<< world_pos.y << std::endl;
-				print = false;
+			/*** Debug Print ****/
+			if(bPrintDebugMsg)
+			{
+				if(((i == 0) && (j == 0)) ||
+				   ((i == camera_parameters[cameraId].Hpixels-1) && (j == 0)) ||
+				   ((i == 0) && (j == camera_parameters[cameraId].Vpixels-1)) ||
+				   ((i == camera_parameters[cameraId].Hpixels-1) && (j == camera_parameters[cameraId].Vpixels-1)) )
+				{
+					std::cout << "i: " << i << "j: " << j<< std::endl;
+					std::cout << "pixel_pos.u : "<< pixel_pos.u << std::endl;
+					std::cout << "pixel_pos.v : "<< pixel_pos.v << std::endl;
+					std::cout << "C_X: "<< c_x << std::endl;
+					std::cout << "C_Y: "<< c_y << std::endl;
+					std::cout << "C_Z: "<< c_z << std::endl;
+					std::cout << "R: "<< R << std::endl;
+					std::cout << "X:  "<< world_pos.x << " " << "Y:  "<< world_pos.y << std::endl;
+				}
 			}
 
 			WORLD_LOOKUP.push_back(world_pos);
@@ -191,7 +189,7 @@ void register_camera(unsigned int camera_id, const platform_camera_parameters * 
 	if(camera_parameters.size() < 1)
 	{
 		camera_parameters.push_back(*param);
-		precompute_world_pos_lookup(camera_id);
+		precompute_world_lookup(camera_id);
 	} else {
 		if(bPrintDebugMsg) std::cout <<"WARNING: Library supports only one camera for now" << std::endl;
 	}
@@ -229,8 +227,10 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL pos)
 bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
 {    
 	DETECTED_SAMPLE sample;
-	PIXEL Center; //center of the bounding box;
-	WORLD World;
+
+	PIXEL pxl_cntr_btm, pxl_left_btm , pxl_right_btm;
+	WORLD world_cntr_btm, world_left_btm, world_right_btm;
+
 	// sample index is same for all samples this call
 	sample.id = index;
 
@@ -252,24 +252,47 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     findContours(temp_image2,contours,hierarchy,CV_RETR_TREE,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
 
     std::vector<vector<Point> > contours_poly( contours.size() );
-    std::vector<Rect> boundRect( contours.size() );
+    std::vector<Rect> boundRect(contours.size() );
     for( int i = 0; i < contours.size(); ++i)
      {
         approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
         boundRect[i] = boundingRect( Mat(contours_poly[i]) );
-        // Get the pixel coordinates and return (x,y) from the lookup
-        Center.u = boundRect[i].tl().x + boundRect[i].br().x;
-        Center.v = boundRect[i].tl().y + boundRect[i].br().y;
-        World = get_world_pos(DEFAULT_CAMERAID,Center);
-        sample.x = World.x;
-        sample.y = World.y;
-        sample.projected_width = boundRect[i].area();
+
+        // Get the pixel coordinates of the rectangular bounding box
+        Point tl = boundRect[i].tl();
+        Point br = boundRect[i].br();
+
+        // Mid point of the bounding box bottom side
+        pxl_cntr_btm.u = (tl.x + br.x)/2;
+        pxl_cntr_btm.v = br.y;
+
+        // Left point of the bounding box bottom side
+        pxl_left_btm.u = tl.x;
+        pxl_left_btm.v = br.y;
+
+        // Left point of the bounding box bottom side
+        pxl_right_btm.u = br.x;
+        pxl_right_btm.v = br.y;
+
+        // Get world position of the above 3 pixels in world
+        world_cntr_btm  = get_world_pos(DEFAULT_CAMERAID,pxl_cntr_btm);
+        world_left_btm  = get_world_pos(DEFAULT_CAMERAID,pxl_left_btm);
+        world_right_btm = get_world_pos(DEFAULT_CAMERAID,pxl_right_btm);
+
+        // These will be used to get the center and the width of the detected sample in world frame.
+        sample.x = world_cntr_btm.x;
+        sample.y = world_cntr_btm.y;
+        sample.projected_width = (world_right_btm.x - world_left_btm.x);
+
+        // Push the sample
+        detected_samples.push_back(sample);
      }
    
     // Print the number of samples found
     if(bPrintDebugMsg)
     	std::cout << "Number of samples found: "<< contours.size()<< std::endl;
 
+    // Fill the output image with bounding boxes if not NULL
     if(out_image != NULL)
     {
 		// Draw all the contours found in the previous step
