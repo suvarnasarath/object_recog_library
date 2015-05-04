@@ -218,18 +218,16 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 	if(pos.u < camera_parameters[cameraId].Hpixels && pos.v < camera_parameters[cameraId].Vpixels)
 	{
 		index = pos.u*camera_parameters[cameraId].Vpixels + pos.v;
-		//std::cout << "U: "<< pos.u << std::endl;
-		//std::cout << "V: "<< pos.v << std::endl;
-		//std::cout << "Index: "<< index << std::endl;
 		world_pos = WORLD_LOOKUP[index];
 	} else {
-		if(bPrintDebugMsg) 	std::cout << "image pixel out of range "<< std::endl;
+		if(bPrintDebugMsg > DEBUG) 	std::cout << "image pixel out of range "<< std::endl;
 	}
 	return world_pos;
 }
 
 bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
 {    
+	bool draw_sample = false;
 	DETECTED_SAMPLE sample;
 
 	PIXEL pxl_cntr_btm, pxl_left_btm , pxl_right_btm;
@@ -255,6 +253,9 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     // Find contours in the thresholded image to determine shapes
     findContours(temp_image2,contours,hierarchy,CV_RETR_TREE,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
 
+    // Draw all the contours found in the previous step
+    Mat drawing = Mat::zeros( temp_image2.size(), CV_8UC3 );
+
     std::vector<vector<Point> > contours_poly( contours.size() );
     std::vector<Rect> boundRect(contours.size() );
     for( int i = 0; i < contours.size(); ++i)
@@ -262,36 +263,48 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     	const std::vector<Point> & countour = contours_poly[i];
 
         approxPolyDP( Mat(contours[i]), contours_poly[i], 5, false );
-        //boundRect[i] = boundingRect( Mat(contours_poly[i]) );
-        boundRect[i] = boundingRect( Mat(contours[i]) );
+        boundRect[i] = boundingRect( Mat(contours_poly[i]) );
+        //boundRect[i] = boundingRect( Mat(contours[i]) );
 
 
         // Get the pixel coordinates of the rectangular bounding box
         Point tl = boundRect[i].tl();
         Point br = boundRect[i].br();
-
-        //std::cout << "TL: "<<tl.x << " "<< tl.y << std::endl;
-        //std::cout << "BR: "<<br.x << " "<< br.y << std::endl;
+        if(bPrintDebugMsg > DEBUG)
+        {
+			std::cout << "TL: "<<tl.x << " "<< tl.y << std::endl;
+			std::cout << "BR: "<<br.x << " "<< br.y << std::endl;
+        }
 
         // Mid point of the bounding box bottom side
         pxl_cntr_btm.u = (tl.x + br.x)/2;
         pxl_cntr_btm.v = br.y;
 
-        //std::cout << "pxl_cntr_btm X:  "<< pxl_cntr_btm.u << std::endl;
-        //std::cout << "pxl_cntr_btm Y:  "<< pxl_cntr_btm.v << std::endl;
+        if(bPrintDebugMsg > DEBUG)
+        {
+			std::cout << "pxl_cntr_btm X:  "<< pxl_cntr_btm.u << std::endl;
+			std::cout << "pxl_cntr_btm Y:  "<< pxl_cntr_btm.v << std::endl;
+        }
 
         // Left point of the bounding box bottom side
         pxl_left_btm.u = tl.x;
         pxl_left_btm.v = br.y;
-        //std::cout << "pxl_left_btm X:  "<< pxl_left_btm.u << std::endl;
-        //std::cout << "pxl_left_btm Y:  "<< pxl_left_btm.v << std::endl;
+
+        if(bPrintDebugMsg > DEBUG)
+        {
+			std::cout << "pxl_left_btm X:  "<< pxl_left_btm.u << std::endl;
+			std::cout << "pxl_left_btm Y:  "<< pxl_left_btm.v << std::endl;
+        }
 
         // Left point of the bounding box bottom side
         pxl_right_btm.u = br.x;
         pxl_right_btm.v = br.y;
 
-        //std::cout << "pxl_right_btm X:  "<< pxl_right_btm.u << std::endl;
-        //std::cout << "pxl_right_btm Y:  "<< pxl_right_btm.v << std::endl;
+        if(bPrintDebugMsg > DEBUG)
+        {
+			std::cout << "pxl_right_btm X:  "<< pxl_right_btm.u << std::endl;
+			std::cout << "pxl_right_btm Y:  "<< pxl_right_btm.v << std::endl;
+        }
 
         // Get world position of the above 3 pixels in world
         world_cntr_btm  = get_world_pos(DEFAULT_CAMERAID,pxl_cntr_btm);
@@ -302,6 +315,8 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
         sample.x = world_cntr_btm.x;
         sample.y = world_cntr_btm.y;
 
+        sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
+
         if(bPrintDebugMsg > DEBUG)
         {
 			std::cout << "world_right_btm Y:  "<< world_right_btm.y << std::endl;
@@ -309,40 +324,36 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
 			std::cout << "diff  Y:  "<< world_right_btm.y - world_left_btm.y << std::endl;
         }
 
-        sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
-
-        if(bPrintDebugMsg > ERROR)
+        if(sample.projected_width > registered_sample[index].min_width &&
+        		sample.projected_width < registered_sample[index].max_width)
         {
-        	std::cout << "sample X:  "<< sample.x << std::endl;
-        	std::cout << "sample Y:  "<< sample.y << std::endl;
-        	std::cout << "sample width:  "<< sample.projected_width << std::endl;
+           	// Push the sample
+			detected_samples.push_back(sample);
+
+			if(bPrintDebugMsg > ERROR)
+			{
+				std::cout << "sample X:  "<< sample.x << std::endl;
+				std::cout << "sample Y:  "<< sample.y << std::endl;
+				std::cout << "sample width:  "<< sample.projected_width << std::endl;
+			}
+
+			if(out_image != NULL)
+			{
+			   Scalar color = Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
+			   drawContours( drawing, contours_poly, i, color, 2, 8, hierarchy, 0, Point() );
+
+			   // Draw a bounding box
+			   rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(), (0,0,255), 2, 8, 0 );
+			} else {
+		    	if(bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
+		    }
+        } else {
+        	if(bPrintDebugMsg > DEBUG)  std::cout << "detected very small sample" <<std::endl;
         }
-
-        // Push the sample
-        detected_samples.push_back(sample);
      }
-   
+
     // Print the number of samples found
-    if(bPrintDebugMsg > ERROR)
-    	std::cout << "Number of samples found: "<< contours.size()<< std::endl;
-
-    // Fill the output image with bounding boxes if not NULL
-    if(out_image != NULL)
-    {
-		// Draw all the contours found in the previous step
-		Mat drawing = Mat::zeros( temp_image2.size(), CV_8UC3 );
-		for( int i = 0; i< contours.size(); i++ )
-		 {
-		   Scalar color = Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
-		   drawContours( drawing, contours_poly, i, color, 2, 8, hierarchy, 0, Point() );
-
-		   // Draw a bounding box
-		   rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(), (0,0,255), 2, 8, 0 );
-		 }
-		 *out_image = Input_image;
-    } else {
-    	if(bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
-    }
+    if(bPrintDebugMsg > DEBUG) std::cout << "Number of samples found: "<< detected_samples.size() << std::endl;
 
     return true;
 }
