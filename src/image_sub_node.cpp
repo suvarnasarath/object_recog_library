@@ -22,7 +22,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 	    ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
 	  }
 
-	  std::cout << "." << std::endl;
+	  //std::cout << "." << std::endl;
 }
 
 void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S_max,int V_max,
@@ -36,7 +36,7 @@ void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S
 int main(int argc, char **argv)
 {
 	// Turn off debug messages.
-	Set_debug(DEBUG);
+	Set_debug(OFF);
 	/*******************************/
 	/******** Register camera ******/
 	/*******************************/
@@ -56,10 +56,10 @@ int main(int argc, char **argv)
 	/********************************/
 	/******** Register samples ******/
 	/********************************/
-	AddSampleforDetection(1,165,50,50,175,255,255,1,1000,1,1); // Red hockey puck
-	AddSampleforDetection(2,20,50,50,30,255,255,1,1000,1,1);   // Yellow PVC pipe
-	AddSampleforDetection(3,5,50,50,15,255,255,1,1000,1,1);    // Orange PVC pipe
-	AddSampleforDetection(4,90,60,60,110,255,255,1,1000,1,1);  // White hooked sample
+	AddSampleforDetection(1,165,50,50,175,255,255,0.1,0.5,1,1); // Red hockey puck
+	AddSampleforDetection(2,20,50,50,30,255,255,0.1,0.5,1,1);   // Yellow PVC pipe
+	AddSampleforDetection(3,5,50,50,15,255,255,0.1,0.5,1,1);    // Orange PVC pipe
+	AddSampleforDetection(4,90,60,60,110,255,255,0.1,0.5,1,1);  // White hooked sample
 	AddSampleforDetection(5,0,50,50,5,255,255,0.01,0.2,1,1);     // Pink Tennis Ball
 	std::cout << "sample size = " << get_registered_sample_size() << std::endl;
 

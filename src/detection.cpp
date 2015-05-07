@@ -11,7 +11,7 @@ using namespace cv;
 
 // Globals
 RNG rng(12345);  // Don't panic, used only for color display
-int kernel_size = 3;
+int kernel_size = 2;
 
 // Init flag
 bool bInit = false;
