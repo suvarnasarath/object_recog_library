@@ -5,16 +5,16 @@
 #include "opencv2/calib3d/calib3d.hpp"
 #include <vector>
 
-cv::RNG rng(12345);
-
-
 int main(int argc, char **argv)
 {
 	cv::namedWindow("video",CV_WINDOW_AUTOSIZE); 
 	cv::Mat frame,src_hsv;
-	cv::Vec3d CurrentPixel;
-	cv::Vec3d Origin(10,127,200); // HSV mid values
+	//cv::Vec3d Origin(10,127,200); 
+	cv::Vec3d Origin(170,10,200); 
 	std::vector<cv::Mat> hsv_planes(3);
+
+	int dilation_size = 3;
+	int erosion_size = 2;
 
 
 	frame = cv::imread(argv[1],CV_LOAD_IMAGE_COLOR);
@@ -31,11 +31,16 @@ int main(int argc, char **argv)
 	cv::Mat V = hsv_planes[2]; 
 
     cv::Mat response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
+    cv::Mat dst = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
+    cv::Mat output = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
+    cv::Mat erosion_out = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
+    cv::Mat dilation_out = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
+
     int hue_ref = Origin[0]*255/179;
     int32_t sat_ref = Origin[1];
     int32_t val_ref = Origin[2];
 
-    const int32_t MAX_SAT_DEV = 120;
+    const int32_t MAX_SAT_DEV = 10;
     const int32_t MAX_VAL_DEV = 120;
     const int32_t MAX_HUE_DEV = 30;
 
@@ -76,19 +81,30 @@ int main(int argc, char **argv)
 
 			//float hue_factor = static_cast<float>(1.0/128.0)*(128 - std::abs(static_cast<int8_t>(hue_diff)));
 
-			const float A1 = 0.65;
-			const float A2 = 0.35;
+			const float A1 = 0.9;
+			const float A2 = 0.1;
 			const float A3 = 0.0;
 
 			float response_value = hue_factor * A1 + sat_factor * A2 + val_factor * A3;
-			//uint8_t image_value = response * 255;
+			//uint8_t image_value = response_value * 255;
 			//image_value = image_value > 200 ? 255 : 0;
 			response.at<float>(rows,cols) = response_value;
 		}
 	}		
 
-	cv::imwrite("hue_out.png",response);
-	cv::imshow("video",response);
+	//cv::imwrite("hue_out.png",response);
+	cv::Mat erosion_element = getStructuringElement( 0,cv::Size( 2*erosion_size + 1, 2*erosion_size+1),
+                                       cv::Point( erosion_size, erosion_size ) );
+ 
+  	cv::erode( response, erosion_out, erosion_element );
+
+  	cv::Mat dilation_element = getStructuringElement( 0,cv::Size( 2*dilation_size + 1, 2*dilation_size+1),
+                                       cv::Point( dilation_size, dilation_size ) );
+  	cv::dilate( erosion_out, dilation_out, dilation_element );
+	cv::GaussianBlur(dilation_out, dst, cv::Size(31,31), 200.0, 200.0);
+	cv::threshold(dst,output,0.7,1.0,cv::THRESH_BINARY);
+	cv::imshow("video",output);
+	
 	cv::waitKey(0);   
 	return 0;
 }
