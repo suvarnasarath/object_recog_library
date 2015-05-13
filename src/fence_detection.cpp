@@ -29,12 +29,9 @@ int main(int argc, char **argv)
 	cv::Mat H = hsv_planes[0]; 
 	cv::Mat S = hsv_planes[1]; 
 	cv::Mat V = hsv_planes[2]; 
-	cv::imwrite("hue_image.png",H);
-	cv::imwrite("sat_image.png",S);
-	cv::imwrite("val_image.png",V);
 
-    cv::Mat out = cv::Mat::zeros(H.rows,H.cols,CV_8UC1);
-    int hue_ref = Origin[0]*255/179;//H.at<uint8_t>(rows,cols);
+    cv::Mat response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
+    int hue_ref = Origin[0]*255/179;
     int32_t sat_ref = Origin[1];
     int32_t val_ref = Origin[2];
 
@@ -83,33 +80,15 @@ int main(int argc, char **argv)
 			const float A2 = 0.35;
 			const float A3 = 0.0;
 
-			float response = hue_factor * A1 + sat_factor * A2 + val_factor * A3;
-
-			uint8_t image_value = response * 255;
-
-			image_value = image_value > 200 ? 255 : 0;
-
-
-
-
-
-
-
-			
-			//CurrentPixel[0] = H.at<uint8_t>(rows,cols);
-			//CurrentPixel[1] = 0;//S.at<uint8_t>(rows,cols);
-			//CurrentPixel[2] = 0;//V.at<uint8_t>(rows,cols);
-
-			//float hue_factor = static_cast<float>(1.0/128.0)*(128 - std::abs(static_cast<int8_t>(hue_diff)));
-
-
-
-			out.at<uint8_t>(rows,cols) = image_value;//(std::abs(static_cast<int8_t>(hue_diff)));
+			float response_value = hue_factor * A1 + sat_factor * A2 + val_factor * A3;
+			//uint8_t image_value = response * 255;
+			//image_value = image_value > 200 ? 255 : 0;
+			response.at<float>(rows,cols) = response_value;
 		}
 	}		
 
-	cv::imwrite("hue_out.png",out);
-	cv::imshow("video",out);
+	cv::imwrite("hue_out.png",response);
+	cv::imshow("video",response);
 	cv::waitKey(0);   
 	return 0;
 }
