@@ -8,7 +8,7 @@ image_transport::Publisher pub;
 
 void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 {
-	std::cout << "Here " << std::endl;
+#if 0
 	try {
 		  cv_ptr = cv_bridge::toCvCopy(msg,"bgr8");
 		  const cv::Mat * imagePtr = &(cv_ptr->image);
@@ -16,14 +16,15 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 		  cv::Mat out_image;
 		  std::vector<DETECTED_SAMPLE> detected_samples;
 		  find_objects(imagePtr,&out_image,detected_samples);
-		  std::cout << detected_samples.size() << std::endl;
+		  //std::cout << detected_samples.size() << std::endl;
 		  sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", out_image).toImageMsg();
 		  pub.publish(msg);
 	  } catch (cv_bridge::Exception& e) {
 	    ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
 	  }
+#endif
 
-	  //std::cout << "." << std::endl;
+	  std::cout << "." << std::endl;
 }
 
 void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S_max,int V_max,

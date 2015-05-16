@@ -14,9 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 
-find_package(OpenCV REQUIRED
-
-)
+find_package(OpenCV REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -116,11 +114,11 @@ add_executable(object_recog_test src/image_sub_node.cpp)
 ## add_dependencies(object_recog_test object_recog)
 
 ## Specify libraries to link a library or executable target against
+target_link_libraries(lib_object_recog ${OpenCV_LIBS})
+
 target_link_libraries(object_recog_test lib_object_recog
   ${catkin_LIBRARIES}
-)
-target_link_libraries(object_recog_test 
-  ${OpenCV_LIBS} 
+  ${OpenCV_LIBS}
 )
 
 #############

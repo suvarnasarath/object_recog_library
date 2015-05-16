@@ -341,7 +341,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     erode(temp_image1,temp_image2,element);
 
     // Find contours in the thresholded image to determine shapes
-    findContours(temp_image2,contours,hierarchy,CV_RETR_TREE,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
+    findContours(temp_image2,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
 
     // Draw all the contours found in the previous step
     Mat drawing = Mat::zeros( temp_image2.size(), CV_8UC3 );
