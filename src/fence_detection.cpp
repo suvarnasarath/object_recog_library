@@ -9,8 +9,9 @@ int main(int argc, char **argv)
 {
 	cv::namedWindow("video",CV_WINDOW_AUTOSIZE); 
 	cv::Mat frame,src_hsv;
-	cv::Vec3d Origin(10,127,200); 
-	//cv::Vec3d Origin(170,10,200); 
+	//cv::Vec3d Origin(10,127,200); // Orange
+	cv::Vec3d Origin(0,25,225);    // white
+
 	std::vector<cv::Mat> hsv_planes(3);
 
 	int dilation_size = 3;
@@ -37,9 +38,9 @@ int main(int argc, char **argv)
     int32_t sat_ref = Origin[1];
     int32_t val_ref = Origin[2];
 
-    const int32_t MAX_SAT_DEV = 120;
-    const int32_t MAX_VAL_DEV = 120;
-    const int32_t MAX_HUE_DEV = 50;
+	const int32_t MAX_HUE_DEV = 255;
+    const int32_t MAX_SAT_DEV = 25;
+    const int32_t MAX_VAL_DEV = 25;
 
     const float HUE_MULT_FACTOR = 1.0/static_cast<double>(MAX_HUE_DEV);
     const float SAT_MULT_FACTOR = 1.0/static_cast<double>(MAX_SAT_DEV);

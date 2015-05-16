@@ -225,6 +225,87 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 	return world_pos;
 }
 
+void generate_heat_map(cv::Mat *in_hsv, cv::Mat &out)
+{
+	if(in_hsv->data)
+	{
+		std::cout << "input image is NULL" << std::endl;
+		return;
+	}
+
+	cv::Mat input = *in_hsv;
+
+	cv::Vec3d Origin(0,10,180);   // Todo: Need to get this from Yaml
+
+	// Vector of Mat elements to store H,S,V planes
+	std::vector<cv::Mat> hsv_planes(3);
+
+	cv::split( input, hsv_planes );
+
+	cv::Mat H = hsv_planes[0];
+	cv::Mat S = hsv_planes[1];
+	cv::Mat V = hsv_planes[2];
+
+	cv::Mat response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
+
+	int hue_ref = Origin[0]*255/179;
+	int32_t sat_ref = Origin[1];
+	int32_t val_ref = Origin[2];
+
+	// Todo: These should come from Yaml for each sample
+	const int32_t MAX_HUE_DEV = 10;
+	const int32_t MAX_SAT_DEV = 10;
+	const int32_t MAX_VAL_DEV = 10;
+
+	// Todo: These should come from Yaml for each sample
+	const float HUE_WEIGHTING_FACTOR = 0.25;
+	const float SAT_WEIGHTING_FACTOR = 0.25;
+	const float VAL_WEIGHTING_FACTOR = 0.5;
+
+	const float HUE_MULT_FACTOR = 1.0/static_cast<double>(MAX_HUE_DEV);
+	const float SAT_MULT_FACTOR = 1.0/static_cast<double>(MAX_SAT_DEV);
+	const float VAL_MULT_FACTOR = 1.0/static_cast<double>(MAX_VAL_DEV);
+
+
+	for(int rows = 0 ;rows < input.rows; rows++)
+	{
+		for(int cols =0; cols < input.cols; cols++)
+		{
+			uint8_t hue_image = static_cast<uint32_t>(H.at<uint8_t>(rows,cols))*255/179;
+			uint8_t hue_diff = hue_image - hue_ref;
+
+			int32_t saturation = static_cast<int32_t>(S.at<uint8_t>(rows,cols));
+			int32_t value = static_cast<int32_t>(V.at<uint8_t>(rows,cols));
+
+			int32_t saturation_deviation = saturation - sat_ref;
+			int32_t value_deviation = value - val_ref;
+			int32_t hue_deviation = static_cast<int8_t>(hue_diff);
+
+			saturation_deviation = std::max(-MAX_SAT_DEV,std::min(MAX_SAT_DEV,saturation_deviation));
+			saturation_deviation = MAX_SAT_DEV - std::abs(saturation_deviation);
+			float sat_factor = SAT_MULT_FACTOR * saturation_deviation;
+
+
+			value_deviation = std::max(-MAX_VAL_DEV,std::min(MAX_VAL_DEV,value_deviation));
+			value_deviation = MAX_VAL_DEV - std::abs(value_deviation);
+			float val_factor = VAL_MULT_FACTOR * value_deviation;
+
+			hue_deviation = std::max(-MAX_HUE_DEV,std::min(MAX_HUE_DEV,hue_deviation));
+			hue_deviation = MAX_HUE_DEV - std::abs(hue_deviation);
+			float hue_factor = HUE_MULT_FACTOR * hue_deviation;
+
+			float response_value = hue_factor * HUE_WEIGHTING_FACTOR +
+					               sat_factor * SAT_WEIGHTING_FACTOR +
+					               val_factor * VAL_WEIGHTING_FACTOR;
+
+			//uint8_t image_value = response_value * 255;
+			//image_value = image_value > 200 ? 255 : 0;
+			response.at<float>(rows,cols) = response_value;
+		}
+	}
+	out = response;
+}
+
 bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
 {    
 	bool draw_sample = false;
@@ -236,7 +317,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
 	// sample index is same for all samples this call
 	sample.id = index;
 
-    cv::Mat temp_image1, temp_image2 ;
+    cv::Mat temp_image1, temp_image2;
     std::vector<vector<Point> > contours;
     std::vector<Vec4i> hierarchy;
 
@@ -260,6 +341,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     std::vector<Rect> boundRect(contours.size() );
     for( int i = 0; i < contours.size(); ++i)
      {
+    	std::cout << "here1  " << std::endl;
     	const std::vector<Point> & countour = contours_poly[i];
 
         approxPolyDP( Mat(contours[i]), contours_poly[i], 5, false );
@@ -371,6 +453,7 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 
 	// Convert the color space to HSV
 	cv::cvtColor(Input_image,hsv_image,CV_BGR2HSV);
+	std::cout << "here1  " << std::endl;
 
 	// Clear detected_sample structure before filling in with new image data
 	detected_samples.clear();
@@ -380,6 +463,7 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 	{
 		if(registered_sample[index].isValid)
 		{
+		  std::cout << "here2  " << std::endl;
 		  process_image(hsv_image, out_image,index,detected_samples);
 		}
 	}
