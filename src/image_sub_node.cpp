@@ -27,11 +27,15 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 }
 
 void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S_max,int V_max,
-						double min_width, double max_width,double min_height,double max_height)
+		int H_origin,int S_origin,int V_origin,double min_width, double max_width,double min_height,double max_height,
+		double H_weight,double S_weight,double V_weight)
 {
-	std::vector<int> min{H_min,S_min,V_min};
-    std::vector<int> max{H_max,S_max,V_max};
-    register_sample(id,min,max,min_width,max_width,min_height,max_height);
+	std::vector<int> hue_detection_range{H_max,H_origin,H_min};
+    std::vector<int> sat_detection_range{S_max,S_origin,S_min};
+    std::vector<int> val_detection_range{V_max,V_origin,V_min};
+    std::vector<double> hsv_weights{H_weight,S_weight,V_weight};
+    register_sample(id,hue_detection_range,sat_detection_range,val_detection_range,
+    				hsv_weights,min_width,max_width,min_height,max_height);
 }
 
 int main(int argc, char **argv)
@@ -60,7 +64,7 @@ int main(int argc, char **argv)
 	//AddSampleforDetection(1,165,50,50,175,255,255,0.1,0.5,1,1); // Red hockey puck
 	//AddSampleforDetection(2,20,50,50,30,255,255,0.1,0.5,1,1);   // Yellow PVC pipe
 	//AddSampleforDetection(3,5,50,50,15,255,255,0.1,0.5,1,1);    // Orange PVC pipe
-	AddSampleforDetection(1,0,0,150,180,60,190,0,1,0,1);  // White hooked sample
+	//AddSampleforDetection(1,0,0,150,180,60,190,0,1,0,1);  // White hooked sample
 	//AddSampleforDetection(5,0,50,50,5,255,255,0.01,0.2,1,1);     // Pink Tennis Ball
 	std::cout << "sample size = " << get_registered_sample_size() << std::endl;
 

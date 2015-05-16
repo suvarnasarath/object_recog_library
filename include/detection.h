@@ -7,9 +7,7 @@
 #include <iostream>
 #include <vector>
 
-/*
- *
- */
+#define USE_OLD_SAMPLE_TYPE (0)
 
 typedef enum
 {
@@ -54,8 +52,11 @@ typedef struct
 }platform_camera_parameters;
 
 void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples);
-void register_sample(unsigned int Id, const std::vector<int>&hsv_min, const std::vector<int>&hsv_max,
-					 double min_width, double max_width, double min_height, double max_height);
+void register_sample(unsigned int Id, const std::vector<int>&hue_detection_range,
+										   const std::vector<int>&sat_detection_range,
+										   const std::vector<int>&val_detection_range,
+										   const std::vector<double>&hsv_weights,double min_width,
+										   double max_width, double min_height, double max_height);
 void register_camera(unsigned int camera_id, const platform_camera_parameters * param);
 int  get_registered_sample_size();
 void set_sample_filter(const std::vector<unsigned int> &filter);

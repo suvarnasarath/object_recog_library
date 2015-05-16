@@ -8,9 +8,8 @@ using namespace cv;
 #define DEFAULT_CAMERAID (0)
 #define DEFAULT_MAX_DIST (5.0)
 
-
 // Globals
-RNG rng(12345);  // Don't panic, used only for color display
+cv::RNG rng(12345);  // Don't panic, used only for color display
 int kernel_size = 2;
 
 // Init flag
@@ -52,8 +51,10 @@ std::vector<WORLD> WORLD_LOOKUP;
 typedef struct
 {
 	unsigned int Id;
-	std::vector<int> HSV_MIN;
-	std::vector<int> HSV_MAX;
+	std::vector<int> H_Range;  // Origin, min and max values to filter out for
+	std::vector<int> S_Range;
+	std::vector<int> V_Range;
+	std::vector<double> HSV_Weights;
 	double min_width;
 	double max_width;
 	double min_height;
@@ -166,21 +167,27 @@ void precompute_world_lookup(unsigned int cameraId)
 /*
  * registers a sample to the database
  */
-void register_sample(unsigned int Id, const std::vector<int> &hsv_min, const std::vector<int>&hsv_max, double min_width, double max_width, double min_height, double max_height)
-{
-	REGISTERED_SAMPLE new_sample;
-	new_sample.Id = Id;
-	new_sample.HSV_MIN = hsv_min;
-	new_sample.HSV_MAX = hsv_max;
-	new_sample.min_width = min_width;
-	new_sample.max_width = max_width;
-	new_sample.min_height = min_height;
-	new_sample.max_height = max_height;
-	new_sample.isValid = true; // true by default for all samples
+void register_sample(unsigned int Id, const std::vector<int>&hue_detection_range,
+						  const std::vector<int>&sat_detection_range,
+						  const std::vector<int>&val_detection_range,
+						  const std::vector<double>&hsv_weights,double min_width,
+						  double max_width, double min_height, double max_height) {
+		REGISTERED_SAMPLE new_sample;
+		new_sample.Id = Id;
+		new_sample.H_Range = hue_detection_range;
+		new_sample.S_Range = sat_detection_range;
+		new_sample.V_Range = val_detection_range;
+		new_sample.HSV_Weights = hsv_weights;
+		new_sample.min_width = min_width;
+		new_sample.max_width = max_width;
+		new_sample.min_height = min_height;
+		new_sample.max_height = max_height;
+		new_sample.isValid = true; // true by default for all samples
 
-	registered_sample.push_back(new_sample);
-	if(bPrintDebugMsg > ERROR) std::cout<<"added new sample Id = " << Id << std::endl;
+		registered_sample.push_back(new_sample);
+		if(bPrintDebugMsg > ERROR) std::cout<<"added new sample Id = " << Id << std::endl;
 }
+
 
 void register_camera(unsigned int camera_id, const platform_camera_parameters * param)
 {
@@ -225,15 +232,14 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 	return world_pos;
 }
 
-void generate_heat_map(cv::Mat *in_hsv, cv::Mat &out)
-{
-	if(in_hsv->data)
-	{
-		std::cout << "input image is NULL" << std::endl;
-		return;
-	}
+void generate_heat_map(cv::Mat &in_hsv,
+					   std::vector<int> &HRange,
+					   std::vector<int> &SRange,
+					   std::vector<int> &VRange,
+		    		   std::vector<double> &HSVWeights,
+		    		   cv::Mat &out) {
 
-	cv::Mat input = *in_hsv;
+	cv::Mat input = in_hsv;
 
 	cv::Vec3d Origin(0,10,180);   // Todo: Need to get this from Yaml
 
@@ -248,19 +254,18 @@ void generate_heat_map(cv::Mat *in_hsv, cv::Mat &out)
 
 	cv::Mat response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
 
-	int hue_ref = Origin[0]*255/179;
-	int32_t sat_ref = Origin[1];
-	int32_t val_ref = Origin[2];
+	int hue_ref = HRange[0]*255/179;
+	int32_t sat_ref = SRange[0];
+	int32_t val_ref = VRange[0];
 
-	// Todo: These should come from Yaml for each sample
-	const int32_t MAX_HUE_DEV = 10;
-	const int32_t MAX_SAT_DEV = 10;
-	const int32_t MAX_VAL_DEV = 10;
+	// Assuming uniform deviation for now.
+	const int32_t MAX_HUE_DEV = std::abs(HRange[1] - HRange[2]);//10;
+	const int32_t MAX_SAT_DEV = std::abs(SRange[1] - SRange[2]);//10;
+	const int32_t MAX_VAL_DEV = std::abs(VRange[1] - VRange[2]);//10;
 
-	// Todo: These should come from Yaml for each sample
-	const float HUE_WEIGHTING_FACTOR = 0.25;
-	const float SAT_WEIGHTING_FACTOR = 0.25;
-	const float VAL_WEIGHTING_FACTOR = 0.5;
+	const float HUE_WEIGHTING_FACTOR = HSVWeights[0];//0.25;
+	const float SAT_WEIGHTING_FACTOR = HSVWeights[1];//0.25;
+	const float VAL_WEIGHTING_FACTOR = HSVWeights[2];//0.5;
 
 	const float HUE_MULT_FACTOR = 1.0/static_cast<double>(MAX_HUE_DEV);
 	const float SAT_MULT_FACTOR = 1.0/static_cast<double>(MAX_SAT_DEV);
@@ -321,8 +326,12 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     std::vector<vector<Point> > contours;
     std::vector<Vec4i> hierarchy;
 
+    generate_heat_map(image_hsv,
+    		registered_sample[index].H_Range,registered_sample[index].S_Range,
+    		registered_sample[index].V_Range,registered_sample[index].HSV_Weights,temp_image1);
+
     // Mark all pixels in the required color range high and other pixels low.
-    inRange(image_hsv,registered_sample[index].HSV_MIN,registered_sample[index].HSV_MAX,temp_image1);
+    //inRange(image_hsv,registered_sample[index].HSV_MIN,registered_sample[index].HSV_MAX,temp_image1);
 
     // Gives the kernel shape for erosion.
     // To do: Experiment with different kernels
