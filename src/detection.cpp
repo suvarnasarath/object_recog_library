@@ -253,18 +253,18 @@ void generate_heat_map(cv::Mat &in_hsv,
 
 	response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
 
-	int hue_ref = 0; //HRange[1]*255/179;
-	int32_t sat_ref = 10 ; //SRange[1];
-	int32_t val_ref = 175; //VRange[1];
+	int hue_ref = 0; //HRange[1]*255/179;hi
+	int32_t sat_ref = 0 ; //SRange[1];
+	int32_t val_ref = 115; //VRange[1];
 
 	// Assuming uniform deviation for now.
 	const int32_t MAX_HUE_DEV = 10;//std::abs(HRange[0] - HRange[2]);
-	const int32_t MAX_SAT_DEV = 10;//std::abs(SRange[0] - SRange[2]);
-	const int32_t MAX_VAL_DEV = 10;//std::abs(VRange[0] - VRange[2]);
+	const int32_t MAX_SAT_DEV = 5;//std::abs(SRange[0] - SRange[2]);
+	const int32_t MAX_VAL_DEV = 20;//std::abs(VRange[0] - VRange[2]);
 
-	const float HUE_WEIGHTING_FACTOR = 0.65; //HSVWeights[0];//0.25;
-	const float SAT_WEIGHTING_FACTOR = 0.35; //HSVWeights[1];//0.25;
-	const float VAL_WEIGHTING_FACTOR = 0.0 ; //HSVWeights[2];//0.5;
+	const float HUE_WEIGHTING_FACTOR = 0.05; //HSVWeights[0];//0.25;
+	const float SAT_WEIGHTING_FACTOR = 0.5; //HSVWeights[1];//0.25;
+	const float VAL_WEIGHTING_FACTOR = 0.45; //HSVWeights[2];//0.5;
 
 	const float HUE_MULT_FACTOR = 1.0/static_cast<double>(MAX_HUE_DEV);
 	const float SAT_MULT_FACTOR = 1.0/static_cast<double>(MAX_SAT_DEV);
@@ -353,7 +353,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     //erode(response,temp_image2,element);
 
     // Find contours in the thresholded image to determine shapes
-    findContours(response,contours,hierarchy,CV_RETR_TREE,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
+    findContours(response,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
 
     // Draw all the contours found in the previous step
     Mat drawing = Mat::zeros( response.size(), CV_8UC3 );

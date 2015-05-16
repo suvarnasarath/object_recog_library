@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 	std::vector<int>Val{10,180,10};
 	std::vector<double>weights{0.65,0.35,0.0};
 
-	register_sample(1,Hue,Val,Sat,weights,0,1,0,1);
+	register_sample(1,Hue,Val,Sat,weights,0.02,0.5,0,1);
 
 
 
