@@ -232,6 +232,7 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 	return world_pos;
 }
 
+cv::Mat response;
 void generate_heat_map(cv::Mat &in_hsv,
 					   std::vector<int> &HRange,
 					   std::vector<int> &SRange,
@@ -240,8 +241,6 @@ void generate_heat_map(cv::Mat &in_hsv,
 		    		   cv::Mat &out) {
 
 	cv::Mat input = in_hsv;
-
-	cv::Vec3d Origin(0,10,180);   // Todo: Need to get this from Yaml
 
 	// Vector of Mat elements to store H,S,V planes
 	std::vector<cv::Mat> hsv_planes(3);
@@ -252,20 +251,20 @@ void generate_heat_map(cv::Mat &in_hsv,
 	cv::Mat S = hsv_planes[1];
 	cv::Mat V = hsv_planes[2];
 
-	cv::Mat response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
+	response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
 
-	int hue_ref = HRange[0]*255/179;
-	int32_t sat_ref = SRange[0];
-	int32_t val_ref = VRange[0];
+	int hue_ref = 0; //HRange[1]*255/179;
+	int32_t sat_ref = 10 ; //SRange[1];
+	int32_t val_ref = 175; //VRange[1];
 
 	// Assuming uniform deviation for now.
-	const int32_t MAX_HUE_DEV = std::abs(HRange[1] - HRange[2]);//10;
-	const int32_t MAX_SAT_DEV = std::abs(SRange[1] - SRange[2]);//10;
-	const int32_t MAX_VAL_DEV = std::abs(VRange[1] - VRange[2]);//10;
+	const int32_t MAX_HUE_DEV = 10;//std::abs(HRange[0] - HRange[2]);
+	const int32_t MAX_SAT_DEV = 10;//std::abs(SRange[0] - SRange[2]);
+	const int32_t MAX_VAL_DEV = 10;//std::abs(VRange[0] - VRange[2]);
 
-	const float HUE_WEIGHTING_FACTOR = HSVWeights[0];//0.25;
-	const float SAT_WEIGHTING_FACTOR = HSVWeights[1];//0.25;
-	const float VAL_WEIGHTING_FACTOR = HSVWeights[2];//0.5;
+	const float HUE_WEIGHTING_FACTOR = 0.65; //HSVWeights[0];//0.25;
+	const float SAT_WEIGHTING_FACTOR = 0.35; //HSVWeights[1];//0.25;
+	const float VAL_WEIGHTING_FACTOR = 0.0 ; //HSVWeights[2];//0.5;
 
 	const float HUE_MULT_FACTOR = 1.0/static_cast<double>(MAX_HUE_DEV);
 	const float SAT_MULT_FACTOR = 1.0/static_cast<double>(MAX_SAT_DEV);
@@ -303,18 +302,23 @@ void generate_heat_map(cv::Mat &in_hsv,
 					               sat_factor * SAT_WEIGHTING_FACTOR +
 					               val_factor * VAL_WEIGHTING_FACTOR;
 
-			//uint8_t image_value = response_value * 255;
-			//image_value = image_value > 200 ? 255 : 0;
-			response.at<float>(rows,cols) = response_value;
+			uint8_t image_value = response_value * 255;
+			image_value = image_value > 160 ? 255 : 0;
+			response.at<float>(rows,cols) = image_value;
 		}
 	}
 	out = response;
 }
 
+int count = 0;
+char file_name[100];
+
 bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
 {    
 	bool draw_sample = false;
 	DETECTED_SAMPLE sample;
+
+	std::cerr << "*******************************" << std::endl;
 
 	PIXEL pxl_cntr_btm, pxl_left_btm , pxl_right_btm;
 	WORLD world_cntr_btm, world_left_btm, world_right_btm;
@@ -330,6 +334,14 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     		registered_sample[index].H_Range,registered_sample[index].S_Range,
     		registered_sample[index].V_Range,registered_sample[index].HSV_Weights,temp_image1);
 
+    // Convert CV_32FC1 to CV_8UC1
+    cv::imwrite("/home/sarath/out_before.png",response);
+
+    response.convertTo(response, CV_8UC1);
+    cv::imwrite("/home/sarath/out_after.png",response);
+
+
+
     // Mark all pixels in the required color range high and other pixels low.
     //inRange(image_hsv,registered_sample[index].HSV_MIN,registered_sample[index].HSV_MAX,temp_image1);
 
@@ -338,13 +350,13 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     Mat element = getStructuringElement( MORPH_RECT, Size(2*kernel_size+1,2*kernel_size+1), Point(0,0));
 
     // Erode the image to get rid of trace elements with similar color to the required sample
-    erode(temp_image1,temp_image2,element);
+    //erode(response,temp_image2,element);
 
     // Find contours in the thresholded image to determine shapes
-    findContours(temp_image2,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
+    findContours(response,contours,hierarchy,CV_RETR_TREE,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
 
     // Draw all the contours found in the previous step
-    Mat drawing = Mat::zeros( temp_image2.size(), CV_8UC3 );
+    Mat drawing = Mat::zeros( response.size(), CV_8UC3 );
 
     std::vector<vector<Point> > contours_poly( contours.size() );
     std::vector<Rect> boundRect(contours.size() );
@@ -407,6 +419,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
         sample.y = world_cntr_btm.y;
 
         sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
+        std::cout << sample.projected_width << std::endl;
 
         if(bPrintDebugMsg > DEBUG)
         {
@@ -445,7 +458,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
 
     // Print the number of samples found
     if(bPrintDebugMsg > DEBUG) std::cout << "Number of samples found: "<< detected_samples.size() << std::endl;
-
+    cv::imwrite("/home/sarath/bounding_box.png",Input_image);
     return true;
 }
 
@@ -462,7 +475,6 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 
 	// Convert the color space to HSV
 	cv::cvtColor(Input_image,hsv_image,CV_BGR2HSV);
-	std::cout << "here1  " << std::endl;
 
 	// Clear detected_sample structure before filling in with new image data
 	detected_samples.clear();
@@ -472,7 +484,6 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 	{
 		if(registered_sample[index].isValid)
 		{
-		  std::cout << "here2  " << std::endl;
 		  process_image(hsv_image, out_image,index,detected_samples);
 		}
 	}
