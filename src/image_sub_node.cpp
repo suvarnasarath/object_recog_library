@@ -47,8 +47,8 @@ int main(int argc, char **argv)
 	/******** Register camera ******/
 	/*******************************/
 	platform_camera_parameters param;
-	param.height = 0.71; // height of the camera from ground plane
-	param.pitch = 0.65;  // Pitch angle of the camera (up from down)
+	param.height = 0.736; //0.65; // height of the camera from ground plane
+	param.pitch = 0.4;//0.65;  // Pitch angle of the camera (up from down)
 	param.HFov = 1.3962634;   // Horizontal field of view
 	param.VFov = 0.7853981625;   // Vertical field of view
 	param.Hpixels = 1920;
@@ -57,21 +57,29 @@ int main(int argc, char **argv)
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
 	param.yaw = 0;
-	param.min_bb_area_in_pixels = 100;
+	param.min_bb_area_in_pixels =400;
 	register_camera(0,&param);
 
 	/********************************/
 	/******** Register samples ******/
 	/********************************/
-
+#if 0
 	// White sample
-	std::vector<double>Hue{0,10,0.05};
-	std::vector<double>Sat{0,5,0.5};
-	std::vector<double>Val{115,20,0.45};
+	std::vector<double>Hue{100,10,0.30};
+	std::vector<double>Sat{20,10,0.0};
+	std::vector<double>Val{230,25,0.70};
 	std::vector<double>width{0.05,0.3};
 	std::vector<double>depth{0.05,0.3};
-
 	register_sample(1,Hue,Sat,Val,width,depth);
+#else
+	std::vector<double>L{235,20,0.80};
+	std::vector<double>a{128,10,0.1};
+	std::vector<double>b{128,10,0.1};
+	std::vector<double>width{0.03,0.3};
+	std::vector<double>depth{0.02,0.3};
+	register_sample(1,L,a,b,width,depth);
+#endif
+
 
 
 

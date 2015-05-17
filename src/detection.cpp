@@ -244,7 +244,7 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 }
 
 cv::Mat response;
-void generate_heat_map(cv::Mat &in_hsv,const channel_info & hue,
+void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
 									   const channel_info & sat,
 									   const channel_info & val,cv::Mat &out)
 {
@@ -258,6 +258,10 @@ void generate_heat_map(cv::Mat &in_hsv,const channel_info & hue,
 	cv::Mat H = hsv_planes[0];
 	cv::Mat S = hsv_planes[1];
 	cv::Mat V = hsv_planes[2];
+
+    //cv::imwrite("L_illumination.png",H);
+    //cv::imwrite("a_illumination.png",S);
+    //cv::imwrite("b_illumination.png",V);
 
 	response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
 
@@ -322,6 +326,89 @@ void generate_heat_map(cv::Mat &in_hsv,const channel_info & hue,
 	out = response;
 }
 
+
+void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
+									   const channel_info & a_info,
+									   const channel_info & b_info,cv::Mat &out)
+{
+
+	cv::Mat input = in_lab;
+	// Vector of Mat elements to store H,S,V planes
+	std::vector<cv::Mat> lab_planes(3);
+
+	cv::split( input, lab_planes );
+
+	cv::Mat L_channel = lab_planes[0];
+	cv::Mat a_channel = lab_planes[1];
+	cv::Mat b_channel = lab_planes[2];
+
+    //cv::imwrite("L.png",L_channel);
+    //cv::imwrite("a.png",a_channel);
+    //cv::imwrite("b.png",b_channel);
+
+	response = cv::Mat::zeros(L_channel.rows,L_channel.cols,CV_32FC1);
+
+	int L_ref = L_info.origin;       //0; //HRange[1]*255/179;hi
+	int32_t a_ref = a_info.origin; 			//0 ; //SRange[1];
+	int32_t b_ref = b_info.origin; 			//115; //VRange[1];
+
+	// Assuming uniform deviation for now.
+	const int32_t max_L_dev = L_info.deviation;//10;
+	const int32_t max_a_dev = a_info.deviation;//5;
+	const int32_t max_b_dev = b_info.deviation;//20;
+
+	const float L_weighting_factor = L_info.weight; // 0.05;
+	const float a_weighting_factor = a_info.weight; // 0.5;
+	const float b_weighting_factor = b_info.weight; // 0.45;
+
+	const float L_mult_factor = 1.0/static_cast<double>(max_L_dev);
+	const float a_mult_factor = 1.0/static_cast<double>(max_a_dev);
+	const float b_mult_factor = 1.0/static_cast<double>(max_b_dev);
+
+	//std::cerr << hue_ref << "," << sat_ref << "," << val_ref << std::endl;
+	//std::cerr << max_hue_dev << "," << max_sat_dev << "," << max_val_dev << std::endl;
+	//std::cerr << hue_weighting_factor << "," << sat_weighting_factor << "," << val_weighting_factor << std::endl;
+
+
+	for(int rows = 0 ;rows < input.rows; rows++)
+	{
+		for(int cols =0; cols < input.cols; cols++)
+		{
+			uint8_t L = static_cast<int32_t>(L_channel.at<uint8_t>(rows,cols));
+			int32_t a = static_cast<int32_t>(a_channel.at<uint8_t>(rows,cols));
+			int32_t b = static_cast<int32_t>(b_channel.at<uint8_t>(rows,cols));
+
+			int32_t a_deviation = a - a_ref;
+			int32_t b_deviation = b - b_ref;
+			int32_t L_deviation = L - L_ref;
+
+			a_deviation = std::max(-max_a_dev,std::min(max_a_dev,a_deviation));
+			a_deviation = max_a_dev - std::abs(a_deviation);
+			float a_factor = a_mult_factor * a_deviation;
+
+
+			b_deviation = std::max(-max_b_dev,std::min(max_b_dev,b_deviation));
+			b_deviation = max_b_dev - std::abs(b_deviation);
+			float b_factor = b_mult_factor * b_deviation;
+
+			L_deviation = std::max(-max_L_dev,std::min(max_L_dev,L_deviation));
+			L_deviation = max_L_dev - std::abs(L_deviation);
+			float L_factor = L_mult_factor * L_deviation;
+
+			float response_value = L_factor * L_weighting_factor +
+					               a_factor * a_weighting_factor +
+					               b_factor * b_weighting_factor;
+
+			const float THRESHOLD = static_cast<double>(MIN_INTENSITY_THRESHOLD_VALUE) / 255.0;
+			uint8_t image_value = response_value > THRESHOLD ? 255 : 0;
+			response.at<float>(rows,cols) = image_value;
+		}
+	}
+	out = response;
+}
+
+
+
 int count = 0;
 char file_name[100];
 
@@ -339,36 +426,34 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 	sample.id = index;
 
     cv::Mat temp_image1, temp_image2;
+
     std::vector<vector<Point> > contours;
     std::vector<Vec4i> hierarchy;
 
-    generate_heat_map(image_hsv,registered_sample[index].hue,registered_sample[index].sat,
-    							registered_sample[index].val,temp_image1);
+    //generate_heat_map_in_HSV(image_hsv,registered_sample[index].hue,registered_sample[index].sat,
+    	//						registered_sample[index].val,temp_image1);
 
+    generate_heat_map_LAB(image_hsv,registered_sample[index].hue,registered_sample[index].sat,
+        							registered_sample[index].val,temp_image1);
 
-    // Convert CV_32FC1 to CV_8UC1
-    //cv::imwrite("/home/sarath/out_before.png",response);
-
-    response.convertTo(response, CV_8UC1);
-    //cv::imwrite("/home/sarath/out_after.png",response);
-
-
+    response.convertTo(temp_image1, CV_8UC1);
+    //cv::adaptiveThreshold(response,response,255,ADAPTIVE_THRESH_GAUSSIAN_C,CV_THRESH_BINARY_INV,13,0);
+    //cv::imwrite("/home/sarath/post_thresholding.png",response);
 
     // Mark all pixels in the required color range high and other pixels low.
     //inRange(image_hsv,registered_sample[index].HSV_MIN,registered_sample[index].HSV_MAX,temp_image1);
 
     // Gives the kernel shape for erosion.
-    // To do: Experiment with different kernels
     Mat element = getStructuringElement( MORPH_RECT, Size(2*kernel_size+1,2*kernel_size+1), Point(0,0));
 
     // Erode the image to get rid of trace elements with similar color to the required sample
     //erode(response,temp_image2,element);
 
     // Find contours in the thresholded image to determine shapes
-    findContours(response,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
+    findContours(temp_image1,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
 
     // Draw all the contours found in the previous step
-    Mat drawing = Mat::zeros( response.size(), CV_8UC3 );
+    Mat drawing = Mat::zeros( temp_image1.size(), CV_8UC3 );
 
     std::vector<vector<Point> > contours_poly( contours.size() );
     std::vector<Rect> boundRect(contours.size() );
@@ -504,7 +589,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	Input_image = *imgPtr;
 
 	// Convert the color space to HSV
-	cv::cvtColor(Input_image,hsv_image,CV_RGB2HSV);
+	cv::cvtColor(Input_image,hsv_image,CV_RGB2Lab);
 
 	// Clear detected_sample structure before filling in with new image data
 	detected_samples.clear();
