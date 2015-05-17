@@ -64,8 +64,8 @@ typedef struct
 	channel_info val;
 	double min_width;
 	double max_width;
-	double min_height;
-	double max_height;
+	double min_depth;
+	double max_depth;
 	bool isValid;  // Should we check for this sample in out detector
 }REGISTERED_SAMPLE;
 
@@ -178,7 +178,7 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 									  const std::vector<double>&sat_param,
 									  const std::vector<double>&val_param,
 									  const std::vector<double>width,
-									  const std::vector<double>height) {
+									  const std::vector<double>depth) {
 		REGISTERED_SAMPLE new_sample;
 		new_sample.Id = Id;
 		new_sample.hue.origin = hue_param[0]+0.5;
@@ -196,8 +196,8 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 		new_sample.min_width = width[0];
 		new_sample.max_width = width[1];
 
-		new_sample.min_height = height[0];
-		new_sample.max_height = height[1];
+		new_sample.min_depth = depth[0];
+		new_sample.max_depth = depth[1];
 		new_sample.isValid = true; // true by default for all samples
 
 		registered_sample.push_back(new_sample);
@@ -332,8 +332,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
 	std::cerr << "*******************************" << std::endl;
 
-	PIXEL pxl_cntr_btm, pxl_left_btm , pxl_right_btm, pxl_left_tp,pxl_right_tp;
-	WORLD world_cntr_btm, world_left_btm, world_right_btm,world_left_tp,world_right_tp;
+	PIXEL pxl_cntr_btm, pxl_left_btm , pxl_right_btm, pxl_left_tp,pxl_right_tp, pxl_cntr_tp;
+	WORLD world_cntr_btm, world_left_btm, world_right_btm,world_left_tp,world_right_tp, world_cntr_tp;
 
 	// sample index is same for all samples this call
 	sample.id = index;
@@ -381,7 +381,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(boundRect[i].area() < camera_parameters[camera_index].min_bb_area_in_pixels)
         {
-        	//continue;
+        	continue;
         }
 
          // Get the pixel coordinates of the rectangular bounding box
@@ -424,18 +424,30 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 			std::cout << "pxl_right_btm Y:  "<< pxl_right_btm.v << std::endl;
         }
 
+        pxl_left_tp.u = tl.x;
+        pxl_left_tp.v = tl.y;
+
+        pxl_right_tp.u = tl.y;
+        pxl_right_tp.v = br.x;
+
         // Get world position of the above 3 pixels in world
         world_cntr_btm  = get_world_pos(camera_index,pxl_cntr_btm);
         world_left_btm  = get_world_pos(camera_index,pxl_left_btm);
         world_right_btm = get_world_pos(camera_index,pxl_right_btm);
+        world_left_tp  = get_world_pos(camera_index,pxl_left_tp);
+        world_right_tp  = get_world_pos(camera_index,pxl_right_tp);
 
         // These will be used to get the center and the width of the detected sample in world frame.
         sample.x = world_cntr_btm.x;
         sample.y = world_cntr_btm.y;
 
+        world_cntr_tp.x = 0.5*(world_left_tp.x+ world_left_tp.x);
+        world_cntr_tp.y = 0.5*(world_left_tp.y+ world_left_tp.y);
+
+
+
         sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
-        //sample.projected_height = std::abs(tl.x - br.x);
-        //std::cout << sample.projected_width << std::endl;
+        sample.projected_depth = std::abs(world_cntr_tp.x - world_cntr_btm.x);
 
         if(bPrintDebugMsg > DEBUG)
         {
@@ -444,8 +456,10 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 			std::cout << "diff  Y:  "<< world_right_btm.y - world_left_btm.y << std::endl;
         }
 
-        if(sample.projected_width > registered_sample[index].min_width &&
-        		sample.projected_width < registered_sample[index].max_width)
+        if((sample.projected_width > registered_sample[index].min_width &&
+        	sample.projected_width < registered_sample[index].max_width) &&
+           (sample.projected_depth > registered_sample[index].min_depth &&
+        	sample.projected_depth < registered_sample[index].max_depth))
         {
            	// Push the sample
 			detected_samples.push_back(sample);

@@ -26,6 +26,7 @@ typedef struct
 	double x;			// Sample world x
 	double y;			// Sample world y
 	double projected_width; // Estimated size of the sample
+	double projected_depth; // Estimated size of the sample
 }DETECTED_SAMPLE;
 
 /*
@@ -55,7 +56,7 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 									  const std::vector<double>&sat_param,
 									  const std::vector<double>&val_param,
 									  const std::vector<double>width,
-									  const std::vector<double>height);
+									  const std::vector<double>depth);
 void register_camera(unsigned int camera_id, const platform_camera_parameters * param);
 int  get_registered_sample_size();
 void set_sample_filter(const std::vector<unsigned int> &filter);

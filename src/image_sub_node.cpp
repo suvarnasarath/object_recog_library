@@ -68,9 +68,9 @@ int main(int argc, char **argv)
 	std::vector<double>Sat{0,5,0.5};
 	std::vector<double>Val{115,20,0.45};
 	std::vector<double>width{0.05,0.3};
-	std::vector<double>height{0.05,0.3};
+	std::vector<double>depth{0.05,0.3};
 
-	register_sample(1,Hue,Sat,Val,width,height);
+	register_sample(1,Hue,Sat,Val,width,depth);
 
 
 
