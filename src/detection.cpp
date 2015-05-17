@@ -330,7 +330,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 	bool draw_sample = false;
 	DETECTED_SAMPLE sample;
 
-	std::cerr << "*******************************" << std::endl;
+	//std::cerr << "*******************************" << std::endl;
 
 	PIXEL pxl_cntr_btm, pxl_left_btm , pxl_right_btm, pxl_left_tp,pxl_right_tp, pxl_cntr_tp;
 	WORLD world_cntr_btm, world_left_btm, world_right_btm,world_left_tp,world_right_tp, world_cntr_tp;
@@ -347,10 +347,10 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
 
     // Convert CV_32FC1 to CV_8UC1
-    cv::imwrite("/home/sarath/out_before.png",response);
+    //cv::imwrite("/home/sarath/out_before.png",response);
 
     response.convertTo(response, CV_8UC1);
-    cv::imwrite("/home/sarath/out_after.png",response);
+    //cv::imwrite("/home/sarath/out_after.png",response);
 
 
 
@@ -488,7 +488,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     // Print the number of samples found
     if(bPrintDebugMsg > DEBUG) std::cout << "Number of samples found: "<< detected_samples.size() << std::endl;
-    cv::imwrite("/home/sarath/bounding_box.png",Input_image);
+    //cv::imwrite("/home/sarath/bounding_box.png",Input_image);
     return true;
 }
 
