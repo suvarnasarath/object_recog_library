@@ -47,14 +47,15 @@ typedef struct
 	double x_offset;		// Camera x offset w.r.t robot frame
 	double y_offset;		// Camera y offset w.r.t robot frame
 	double yaw;				// Camera yaw offset w.r.t robot frame
+	unsigned int min_bb_area_in_pixels;
 }platform_camera_parameters;
 
-void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples);
-void register_sample(unsigned int Id, const std::vector<int>&hue_detection_range,
-									  const std::vector<int>&sat_detection_range,
-									  const std::vector<int>&val_detection_range,
-									  const std::vector<double>&hsv_weights,double min_width,
-									  double max_width, double min_height, double max_height);
+void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples);
+void register_sample(unsigned int Id, const std::vector<double>&hue_param,
+									  const std::vector<double>&sat_param,
+									  const std::vector<double>&val_param,
+									  const std::vector<double>width,
+									  const std::vector<double>height);
 void register_camera(unsigned int camera_id, const platform_camera_parameters * param);
 int  get_registered_sample_size();
 void set_sample_filter(const std::vector<unsigned int> &filter);

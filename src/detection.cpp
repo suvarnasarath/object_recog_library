@@ -5,7 +5,6 @@ using namespace cv;
 
 #define MAX_SAMPLES (256)
 #define PI          (3.14159265)
-#define DEFAULT_CAMERAID (0)
 #define DEFAULT_MAX_DIST (5.0)
 
 // Globals
@@ -18,6 +17,8 @@ bool bInit = false;
 LOGLEVEL bPrintDebugMsg = OFF; // Turn OFF later
 
 cv::Mat Input_image;
+
+#define MIN_INTENSITY_THRESHOLD_VALUE 160
 
 /*
  * pixel coordinates
@@ -40,6 +41,13 @@ typedef struct
 // Lookup to store world positions
 std::vector<WORLD> WORLD_LOOKUP;
 
+typedef struct
+{
+	int origin;
+	int deviation;
+	double weight;
+}channel_info;
+
 /*
  * Definition of input sample
  * @ id : Id of the sample
@@ -51,10 +59,9 @@ std::vector<WORLD> WORLD_LOOKUP;
 typedef struct
 {
 	unsigned int Id;
-	std::vector<int> H_Range;  // Origin, min and max values to filter out for
-	std::vector<int> S_Range;
-	std::vector<int> V_Range;
-	std::vector<double> HSV_Weights;
+	channel_info hue;
+	channel_info sat;
+	channel_info val;
 	double min_width;
 	double max_width;
 	double min_height;
@@ -80,10 +87,10 @@ void Set_debug(LOGLEVEL level)
 	}
 }
 
-void calculate_pixel_attitude_and_azimuth(PIXEL pixel_pos, double &elevation, double &azimuth)
+void calculate_pixel_attitude_and_azimuth(unsigned int camera_index, PIXEL pixel_pos, double &elevation, double &azimuth)
 {
-	azimuth   = (pixel_pos.u * camera_parameters[DEFAULT_CAMERAID].HFov)/static_cast<double>(camera_parameters[DEFAULT_CAMERAID].Hpixels);
-	elevation = (pixel_pos.v * camera_parameters[DEFAULT_CAMERAID].VFov)/static_cast<double>(camera_parameters[DEFAULT_CAMERAID].Vpixels);
+	azimuth   = (pixel_pos.u * camera_parameters[camera_index].HFov)/static_cast<double>(camera_parameters[camera_index].Hpixels);
+	elevation = (pixel_pos.v * camera_parameters[camera_index].VFov)/static_cast<double>(camera_parameters[camera_index].Vpixels);
 }
 
 #define Epsilon 0.001
@@ -108,7 +115,7 @@ void precompute_world_lookup(unsigned int cameraId)
 			pixel_pos.u = static_cast<double>(camera_parameters[cameraId].Hpixels/2) - i;
 			pixel_pos.v = static_cast<double>(camera_parameters[cameraId].Vpixels/2) - j;
 
-			calculate_pixel_attitude_and_azimuth(pixel_pos, elevation, azimuth);
+			calculate_pixel_attitude_and_azimuth(cameraId,pixel_pos, elevation, azimuth);
 
 			double c_x = cos(alpha)*cos(elevation)*cos(azimuth) + sin(alpha)*sin(elevation);
 			double c_y = cos(elevation)*sin(azimuth);
@@ -167,21 +174,30 @@ void precompute_world_lookup(unsigned int cameraId)
 /*
  * registers a sample to the database
  */
-void register_sample(unsigned int Id, const std::vector<int>&hue_detection_range,
-						  const std::vector<int>&sat_detection_range,
-						  const std::vector<int>&val_detection_range,
-						  const std::vector<double>&hsv_weights,double min_width,
-						  double max_width, double min_height, double max_height) {
+void register_sample(unsigned int Id, const std::vector<double>&hue_param,
+									  const std::vector<double>&sat_param,
+									  const std::vector<double>&val_param,
+									  const std::vector<double>width,
+									  const std::vector<double>height) {
 		REGISTERED_SAMPLE new_sample;
 		new_sample.Id = Id;
-		new_sample.H_Range = hue_detection_range;
-		new_sample.S_Range = sat_detection_range;
-		new_sample.V_Range = val_detection_range;
-		new_sample.HSV_Weights = hsv_weights;
-		new_sample.min_width = min_width;
-		new_sample.max_width = max_width;
-		new_sample.min_height = min_height;
-		new_sample.max_height = max_height;
+		new_sample.hue.origin = hue_param[0]+0.5;
+		new_sample.hue.deviation = hue_param[1]+0.5;
+		new_sample.hue.weight = hue_param[2];
+
+		new_sample.sat.origin = sat_param[0]+0.5;
+		new_sample.sat.deviation = sat_param[1]+0.5;
+		new_sample.sat.weight = sat_param[2];
+
+		new_sample.val.origin = val_param[0]+0.5;
+		new_sample.val.deviation = val_param[1]+0.5;
+		new_sample.val.weight = val_param[2];
+
+		new_sample.min_width = width[0];
+		new_sample.max_width = width[1];
+
+		new_sample.min_height = height[0];
+		new_sample.max_height = height[1];
 		new_sample.isValid = true; // true by default for all samples
 
 		registered_sample.push_back(new_sample);
@@ -191,14 +207,9 @@ void register_sample(unsigned int Id, const std::vector<int>&hue_detection_range
 
 void register_camera(unsigned int camera_id, const platform_camera_parameters * param)
 {
-	// Supports only one camera at this time.
-	if(camera_parameters.size() < 1)
-	{
-		camera_parameters.push_back(*param);
-		precompute_world_lookup(camera_id);
-	} else {
-		if(bPrintDebugMsg > DEBUG) std::cout <<"WARNING: Library supports only one camera for now" << std::endl;
-	}
+// Check for already added caeras
+	camera_parameters.push_back(*param);
+	precompute_world_lookup(camera_id);
 }
 
 int get_registered_sample_size()
@@ -233,15 +244,12 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 }
 
 cv::Mat response;
-void generate_heat_map(cv::Mat &in_hsv,
-					   std::vector<int> &HRange,
-					   std::vector<int> &SRange,
-					   std::vector<int> &VRange,
-		    		   std::vector<double> &HSVWeights,
-		    		   cv::Mat &out) {
+void generate_heat_map(cv::Mat &in_hsv,const channel_info & hue,
+									   const channel_info & sat,
+									   const channel_info & val,cv::Mat &out)
+{
 
 	cv::Mat input = in_hsv;
-
 	// Vector of Mat elements to store H,S,V planes
 	std::vector<cv::Mat> hsv_planes(3);
 
@@ -253,22 +261,26 @@ void generate_heat_map(cv::Mat &in_hsv,
 
 	response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
 
-	int hue_ref = 0; //HRange[1]*255/179;hi
-	int32_t sat_ref = 0 ; //SRange[1];
-	int32_t val_ref = 115; //VRange[1];
+	int hue_ref = hue.origin*255/179;       //0; //HRange[1]*255/179;hi
+	int32_t sat_ref = sat.origin; 			//0 ; //SRange[1];
+	int32_t val_ref = val.origin; 			//115; //VRange[1];
 
 	// Assuming uniform deviation for now.
-	const int32_t MAX_HUE_DEV = 10;//std::abs(HRange[0] - HRange[2]);
-	const int32_t MAX_SAT_DEV = 5;//std::abs(SRange[0] - SRange[2]);
-	const int32_t MAX_VAL_DEV = 20;//std::abs(VRange[0] - VRange[2]);
+	const int32_t max_hue_dev = hue.deviation;//10;
+	const int32_t max_sat_dev = sat.deviation;//5;
+	const int32_t max_val_dev = val.deviation;//20;
 
-	const float HUE_WEIGHTING_FACTOR = 0.05; //HSVWeights[0];//0.25;
-	const float SAT_WEIGHTING_FACTOR = 0.5; //HSVWeights[1];//0.25;
-	const float VAL_WEIGHTING_FACTOR = 0.45; //HSVWeights[2];//0.5;
+	const float hue_weighting_factor = hue.weight; // 0.05;
+	const float sat_weighting_factor = sat.weight; // 0.5;
+	const float val_weighting_factor = val.weight; // 0.45;
 
-	const float HUE_MULT_FACTOR = 1.0/static_cast<double>(MAX_HUE_DEV);
-	const float SAT_MULT_FACTOR = 1.0/static_cast<double>(MAX_SAT_DEV);
-	const float VAL_MULT_FACTOR = 1.0/static_cast<double>(MAX_VAL_DEV);
+	const float hue_mult_factor = 1.0/static_cast<double>(max_hue_dev);
+	const float sat_mult_factor = 1.0/static_cast<double>(max_sat_dev);
+	const float val_mult_factor = 1.0/static_cast<double>(max_val_dev);
+
+	//std::cerr << hue_ref << "," << sat_ref << "," << val_ref << std::endl;
+	//std::cerr << max_hue_dev << "," << max_sat_dev << "," << max_val_dev << std::endl;
+	//std::cerr << hue_weighting_factor << "," << sat_weighting_factor << "," << val_weighting_factor << std::endl;
 
 
 	for(int rows = 0 ;rows < input.rows; rows++)
@@ -285,25 +297,25 @@ void generate_heat_map(cv::Mat &in_hsv,
 			int32_t value_deviation = value - val_ref;
 			int32_t hue_deviation = static_cast<int8_t>(hue_diff);
 
-			saturation_deviation = std::max(-MAX_SAT_DEV,std::min(MAX_SAT_DEV,saturation_deviation));
-			saturation_deviation = MAX_SAT_DEV - std::abs(saturation_deviation);
-			float sat_factor = SAT_MULT_FACTOR * saturation_deviation;
+			saturation_deviation = std::max(-max_sat_dev,std::min(max_sat_dev,saturation_deviation));
+			saturation_deviation = max_sat_dev - std::abs(saturation_deviation);
+			float sat_factor = sat_mult_factor * saturation_deviation;
 
 
-			value_deviation = std::max(-MAX_VAL_DEV,std::min(MAX_VAL_DEV,value_deviation));
-			value_deviation = MAX_VAL_DEV - std::abs(value_deviation);
-			float val_factor = VAL_MULT_FACTOR * value_deviation;
+			value_deviation = std::max(-max_val_dev,std::min(max_val_dev,value_deviation));
+			value_deviation = max_val_dev - std::abs(value_deviation);
+			float val_factor = val_mult_factor * value_deviation;
 
-			hue_deviation = std::max(-MAX_HUE_DEV,std::min(MAX_HUE_DEV,hue_deviation));
-			hue_deviation = MAX_HUE_DEV - std::abs(hue_deviation);
-			float hue_factor = HUE_MULT_FACTOR * hue_deviation;
+			hue_deviation = std::max(-max_hue_dev,std::min(max_hue_dev,hue_deviation));
+			hue_deviation = max_hue_dev - std::abs(hue_deviation);
+			float hue_factor = hue_mult_factor * hue_deviation;
 
-			float response_value = hue_factor * HUE_WEIGHTING_FACTOR +
-					               sat_factor * SAT_WEIGHTING_FACTOR +
-					               val_factor * VAL_WEIGHTING_FACTOR;
+			float response_value = hue_factor * hue_weighting_factor +
+					               sat_factor * sat_weighting_factor +
+					               val_factor * val_weighting_factor;
 
 			uint8_t image_value = response_value * 255;
-			image_value = image_value > 160 ? 255 : 0;
+			image_value = image_value > MIN_INTENSITY_THRESHOLD_VALUE ? 255 : 0;
 			response.at<float>(rows,cols) = image_value;
 		}
 	}
@@ -313,15 +325,15 @@ void generate_heat_map(cv::Mat &in_hsv,
 int count = 0;
 char file_name[100];
 
-bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
+bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
 {    
 	bool draw_sample = false;
 	DETECTED_SAMPLE sample;
 
 	std::cerr << "*******************************" << std::endl;
 
-	PIXEL pxl_cntr_btm, pxl_left_btm , pxl_right_btm;
-	WORLD world_cntr_btm, world_left_btm, world_right_btm;
+	PIXEL pxl_cntr_btm, pxl_left_btm , pxl_right_btm, pxl_left_tp,pxl_right_tp;
+	WORLD world_cntr_btm, world_left_btm, world_right_btm,world_left_tp,world_right_tp;
 
 	// sample index is same for all samples this call
 	sample.id = index;
@@ -330,9 +342,9 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     std::vector<vector<Point> > contours;
     std::vector<Vec4i> hierarchy;
 
-    generate_heat_map(image_hsv,
-    		registered_sample[index].H_Range,registered_sample[index].S_Range,
-    		registered_sample[index].V_Range,registered_sample[index].HSV_Weights,temp_image1);
+    generate_heat_map(image_hsv,registered_sample[index].hue,registered_sample[index].sat,
+    							registered_sample[index].val,temp_image1);
+
 
     // Convert CV_32FC1 to CV_8UC1
     cv::imwrite("/home/sarath/out_before.png",response);
@@ -362,17 +374,20 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     std::vector<Rect> boundRect(contours.size() );
     for( int i = 0; i < contours.size(); ++i)
      {
-    	std::cout << "here1  " << std::endl;
     	const std::vector<Point> & countour = contours_poly[i];
 
         approxPolyDP( Mat(contours[i]), contours_poly[i], 5, false );
         boundRect[i] = boundingRect( Mat(contours_poly[i]) );
-        //boundRect[i] = boundingRect( Mat(contours[i]) );
 
+        if(boundRect[i].area() < camera_parameters[camera_index].min_bb_area_in_pixels)
+        {
+        	//continue;
+        }
 
-        // Get the pixel coordinates of the rectangular bounding box
+         // Get the pixel coordinates of the rectangular bounding box
         Point tl = boundRect[i].tl();
         Point br = boundRect[i].br();
+
         if(bPrintDebugMsg > DEBUG)
         {
 			std::cout << "TL: "<<tl.x << " "<< tl.y << std::endl;
@@ -410,16 +425,17 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
         }
 
         // Get world position of the above 3 pixels in world
-        world_cntr_btm  = get_world_pos(DEFAULT_CAMERAID,pxl_cntr_btm);
-        world_left_btm  = get_world_pos(DEFAULT_CAMERAID,pxl_left_btm);
-        world_right_btm = get_world_pos(DEFAULT_CAMERAID,pxl_right_btm);
+        world_cntr_btm  = get_world_pos(camera_index,pxl_cntr_btm);
+        world_left_btm  = get_world_pos(camera_index,pxl_left_btm);
+        world_right_btm = get_world_pos(camera_index,pxl_right_btm);
 
         // These will be used to get the center and the width of the detected sample in world frame.
         sample.x = world_cntr_btm.x;
         sample.y = world_cntr_btm.y;
 
         sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
-        std::cout << sample.projected_width << std::endl;
+        //sample.projected_height = std::abs(tl.x - br.x);
+        //std::cout << sample.projected_width << std::endl;
 
         if(bPrintDebugMsg > DEBUG)
         {
@@ -462,7 +478,7 @@ bool process_image(cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<D
     return true;
 }
 
-void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
+void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
 	cv::Mat hsv_image;
 	if(! imgPtr->data) {
@@ -484,7 +500,7 @@ void find_objects(const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED
 	{
 		if(registered_sample[index].isValid)
 		{
-		  process_image(hsv_image, out_image,index,detected_samples);
+		  process_image(camera_index,hsv_image, out_image,index,detected_samples);
 		}
 	}
 }

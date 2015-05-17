@@ -15,7 +15,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 		  cv_ptr = cv_bridge::toCvCopy(msg,"bgr8");
 		  const cv::Mat * imagePtr = &(cv_ptr->image);
 
-		  find_objects(imagePtr,&out_image,detected_samples);
+		  find_objects(0,imagePtr,&out_image,detected_samples);
 		  //std::cout << detected_samples.size() << std::endl;
 		  sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", out_image).toImageMsg();
 		  pub.publish(msg);
@@ -56,6 +56,7 @@ int main(int argc, char **argv)
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
 	param.yaw = 0;
+	param.min_bb_area_in_pixels = 100;
 	register_camera(0,&param);
 
 	/********************************/
@@ -63,12 +64,13 @@ int main(int argc, char **argv)
 	/********************************/
 
 	// White sample
-	std::vector<int>Hue{10,0,10};
-	std::vector<int>Sat{10,10,10};
-	std::vector<int>Val{10,180,10};
-	std::vector<double>weights{0.65,0.35,0.0};
+	std::vector<double>Hue{0,10,0.05};
+	std::vector<double>Sat{0,5,0.5};
+	std::vector<double>Val{115,20,0.45};
+	std::vector<double>width{0.05,0.3};
+	std::vector<double>height{0.05,0.3};
 
-	register_sample(1,Hue,Val,Sat,weights,0.02,0.5,0,1);
+	register_sample(1,Hue,Sat,Val,width,height);
 
 
 
@@ -79,7 +81,7 @@ int main(int argc, char **argv)
 	//AddSampleforDetection(1,0,0,150,180,60,190,0,1,0,1);        // White hooked sample
 	//AddSampleforDetection(5,0,50,50,5,255,255,0.01,0.2,1,1);    // Pink Tennis Ball
 
-	std::cout << "sample size = " << get_registered_sample_size() << std::endl;
+	//std::cout << "sample size = " << get_registered_sample_size() << std::endl;
 
 
 	/********************************/
