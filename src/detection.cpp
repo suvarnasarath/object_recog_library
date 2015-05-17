@@ -504,7 +504,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	Input_image = *imgPtr;
 
 	// Convert the color space to HSV
-	cv::cvtColor(Input_image,hsv_image,CV_BGR2HSV);
+	cv::cvtColor(Input_image,hsv_image,CV_RGB2HSV);
 
 	// Clear detected_sample structure before filling in with new image data
 	detected_samples.clear();

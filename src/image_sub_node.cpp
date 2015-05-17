@@ -12,16 +12,16 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
     std::vector<DETECTED_SAMPLE> detected_samples;
 	try {
 		  std::cout << "." << std::endl;
-		  cv_ptr = cv_bridge::toCvCopy(msg,"bgr8");
+		  cv_ptr = cv_bridge::toCvCopy(msg,"rgb8");
 		  cv::Mat * imagePtr = &(cv_ptr->image);
 		  cv::Mat *out_image = &(cv_ptr->image);
 
 		  find_objects(0,imagePtr,out_image,detected_samples);
 		  //std::cout << detected_samples.size() << std::endl;
-		  sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", *out_image).toImageMsg();
+		  sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "rgb8", *out_image).toImageMsg();
 		  pub.publish(msg);
 	  } catch (cv_bridge::Exception& e) {
-	    ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
+	    ROS_ERROR("Could not convert from '%s' to 'rgb8'.", msg->encoding.c_str());
 	  }
 }
 
@@ -42,7 +42,7 @@ void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S
 int main(int argc, char **argv)
 {
 	// Turn off debug messages.
-	Set_debug(OFF);
+	Set_debug(VERBOSE);
 	/*******************************/
 	/******** Register camera ******/
 	/*******************************/
