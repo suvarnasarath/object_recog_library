@@ -67,6 +67,7 @@ typedef struct
 	double min_depth;
 	double max_depth;
 	bool isValid;  // Should we check for this sample in out detector
+	double pixel_dist_factor;
 }REGISTERED_SAMPLE;
 
 
@@ -178,7 +179,8 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 									  const std::vector<double>&sat_param,
 									  const std::vector<double>&val_param,
 									  const std::vector<double>width,
-									  const std::vector<double>depth) {
+									  const std::vector<double>depth,
+									  double pixel_dist_factor) {
 		REGISTERED_SAMPLE new_sample;
 		new_sample.Id = Id;
 		new_sample.hue.origin = hue_param[0]+0.5;
@@ -199,6 +201,7 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 		new_sample.min_depth = depth[0];
 		new_sample.max_depth = depth[1];
 		new_sample.isValid = true; // true by default for all samples
+		new_sample.pixel_dist_factor = pixel_dist_factor;
 
 		registered_sample.push_back(new_sample);
 		if(bPrintDebugMsg > ERROR) std::cout<<"added new sample Id = " << Id << std::endl;
@@ -582,8 +585,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         {
 
 
-          double dist = sqrt(sample.x*sample.x +  sample.y*sample.y);
-          double expected_area = 6000/dist;
+          double dist = std::max(std::sqrt(sample.x*sample.x +  sample.y*sample.y),1.0);
+          double expected_area = registered_sample[index].pixel_dist_factor/dist;
           if(boundRect[i].area() > expected_area)
           {
 				std::cout << "accepted sample area: " <<boundRect[i].area() << "expected_area:  " <<expected_area <<std::endl;

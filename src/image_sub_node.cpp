@@ -57,7 +57,7 @@ int main(int argc, char **argv)
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
 	param.yaw = 0;
-	param.min_bb_area_in_pixels =1000;
+	param.min_bb_area_in_pixels =400;
 	register_camera(0,&param);
 
 	/********************************/
@@ -77,7 +77,8 @@ int main(int argc, char **argv)
 	std::vector<double>b{128,20,0.2};
 	std::vector<double>width{0.03,0.5};
 	std::vector<double>depth{0.05,10.6};
-	register_sample(1,L,a,b,width,depth);
+	double pixel_dist_factor_white = 6000;
+	register_sample(1,L,a,b,width,depth,pixel_dist_factor_white);
 #endif
 
 
