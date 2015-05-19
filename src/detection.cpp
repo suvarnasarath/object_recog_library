@@ -318,9 +318,9 @@ void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
 					               sat_factor * sat_weighting_factor +
 					               val_factor * val_weighting_factor;
 
-			uint8_t image_value = response_value * 255;
-			image_value = image_value > MIN_INTENSITY_THRESHOLD_VALUE ? 255 : 0;
-			response.at<float>(rows,cols) = image_value;
+			//uint8_t image_value = response_value * 255;
+			//image_value = image_value > MIN_INTENSITY_THRESHOLD_VALUE ? 255 : 0;
+			response.at<float>(rows,cols) = response_value;
 		}
 	}
 	out = response;
@@ -342,9 +342,9 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	cv::Mat a_channel = lab_planes[1];
 	cv::Mat b_channel = lab_planes[2];
 
-    //cv::imwrite("L.png",L_channel);
-    //cv::imwrite("a.png",a_channel);
-    //cv::imwrite("b.png",b_channel);
+    cv::imwrite("/home/sarath/L.png",L_channel);
+    cv::imwrite("/home/sarath/a.png",a_channel);
+    cv::imwrite("/home/sarath/b.png",b_channel);
 
 	response = cv::Mat::zeros(L_channel.rows,L_channel.cols,CV_32FC1);
 
@@ -365,11 +365,6 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	const float a_mult_factor = 1.0/static_cast<double>(max_a_dev);
 	const float b_mult_factor = 1.0/static_cast<double>(max_b_dev);
 
-	//std::cerr << hue_ref << "," << sat_ref << "," << val_ref << std::endl;
-	//std::cerr << max_hue_dev << "," << max_sat_dev << "," << max_val_dev << std::endl;
-	//std::cerr << hue_weighting_factor << "," << sat_weighting_factor << "," << val_weighting_factor << std::endl;
-
-
 	for(int rows = 0 ;rows < input.rows; rows++)
 	{
 		for(int cols =0; cols < input.cols; cols++)
@@ -385,23 +380,26 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 			a_deviation = std::max(-max_a_dev,std::min(max_a_dev,a_deviation));
 			a_deviation = max_a_dev - std::abs(a_deviation);
 			float a_factor = a_mult_factor * a_deviation;
+			a_factor = std::min(1.0,2.0*a_factor);
 
 
 			b_deviation = std::max(-max_b_dev,std::min(max_b_dev,b_deviation));
 			b_deviation = max_b_dev - std::abs(b_deviation);
 			float b_factor = b_mult_factor * b_deviation;
+			b_factor = std::min(1.0,2.0*b_factor);
 
 			L_deviation = std::max(-max_L_dev,std::min(max_L_dev,L_deviation));
 			L_deviation = max_L_dev - std::abs(L_deviation);
 			float L_factor = L_mult_factor * L_deviation;
+			L_factor = std::min(1.0,2.0*L_factor);
 
 			float response_value = L_factor * L_weighting_factor +
 					               a_factor * a_weighting_factor +
 					               b_factor * b_weighting_factor;
 
-			const float THRESHOLD = static_cast<double>(MIN_INTENSITY_THRESHOLD_VALUE) / 255.0;
-			uint8_t image_value = response_value > THRESHOLD ? 255 : 0;
-			response.at<float>(rows,cols) = image_value;
+			//const float THRESHOLD = static_cast<double>(MIN_INTENSITY_THRESHOLD_VALUE) / 255.0;
+			//uint8_t image_value = response_value > THRESHOLD ? 255 : 0;
+			response.at<float>(rows,cols) = response_value * 255.0;
 		}
 	}
 	out = response;
@@ -417,7 +415,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 	bool draw_sample = false;
 	DETECTED_SAMPLE sample;
 
-	//std::cerr << "*******************************" << std::endl;
+	std::cerr << "*******************************" << std::endl;
 
 	PIXEL pxl_cntr_btm, pxl_left_btm , pxl_right_btm, pxl_left_tp,pxl_right_tp, pxl_cntr_tp;
 	WORLD world_cntr_btm, world_left_btm, world_right_btm,world_left_tp,world_right_tp, world_cntr_tp;
@@ -436,10 +434,18 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     generate_heat_map_LAB(image_hsv,registered_sample[index].hue,registered_sample[index].sat,
         							registered_sample[index].val,temp_image1);
 
-    response.convertTo(temp_image1, CV_8UC1);
-    //cv::adaptiveThreshold(response,response,255,ADAPTIVE_THRESH_GAUSSIAN_C,CV_THRESH_BINARY_INV,13,0);
-    //cv::imwrite("/home/sarath/post_thresholding.png",response);
+    cv::imwrite("/home/sarath/Heat_Map.png",response);
 
+    cv::threshold(response,response,200,255,CV_THRESH_BINARY);
+    response.convertTo(response, CV_8UC1);
+
+    //response.convertTo(response, CV_8UC1);
+    //cv::adaptiveThreshold(response,response,255,ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,127,-100);
+    cv::imwrite("/home/sarath/post_thresholding.png",response);
+
+
+
+    cv::imwrite("/home/sarath/.png",response);
     // Mark all pixels in the required color range high and other pixels low.
     //inRange(image_hsv,registered_sample[index].HSV_MIN,registered_sample[index].HSV_MAX,temp_image1);
 
@@ -450,10 +456,10 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     //erode(response,temp_image2,element);
 
     // Find contours in the thresholded image to determine shapes
-    findContours(temp_image1,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
+    findContours(response,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
 
     // Draw all the contours found in the previous step
-    Mat drawing = Mat::zeros( temp_image1.size(), CV_8UC3 );
+    Mat drawing = Mat::zeros( response.size(), CV_8UC3 );
 
     std::vector<vector<Point> > contours_poly( contours.size() );
     std::vector<Rect> boundRect(contours.size() );
@@ -464,16 +470,19 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         approxPolyDP( Mat(contours[i]), contours_poly[i], 5, false );
         boundRect[i] = boundingRect( Mat(contours_poly[i]) );
 
-        if(boundRect[i].area() < camera_parameters[camera_index].min_bb_area_in_pixels)
-        {
-        	continue;
-        }
+   	    if(boundRect[i].area() < camera_parameters[camera_index].min_bb_area_in_pixels)
+		{
+			std::cout << "failed area test: " << boundRect[i].area() << std::endl;
+			continue;
+		} else {
+			std::cout << "passed area test: " << boundRect[i].area() << std::endl;
+		}
 
          // Get the pixel coordinates of the rectangular bounding box
         Point tl = boundRect[i].tl();
         Point br = boundRect[i].br();
 
-        if(bPrintDebugMsg > DEBUG)
+        if(bPrintDebugMsg > VERBOSE)
         {
 			std::cout << "TL: "<<tl.x << " "<< tl.y << std::endl;
 			std::cout << "BR: "<<br.x << " "<< br.y << std::endl;
@@ -483,7 +492,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         pxl_cntr_btm.u = (tl.x + br.x)/2;
         pxl_cntr_btm.v = br.y;
 
-        if(bPrintDebugMsg > DEBUG)
+        if(bPrintDebugMsg > ERROR)
         {
 			std::cout << "pxl_cntr_btm X:  "<< pxl_cntr_btm.u << std::endl;
 			std::cout << "pxl_cntr_btm Y:  "<< pxl_cntr_btm.v << std::endl;
@@ -493,7 +502,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         pxl_left_btm.u = tl.x;
         pxl_left_btm.v = br.y;
 
-        if(bPrintDebugMsg > DEBUG)
+        if(bPrintDebugMsg > ERROR)
         {
 			std::cout << "pxl_left_btm X:  "<< pxl_left_btm.u << std::endl;
 			std::cout << "pxl_left_btm Y:  "<< pxl_left_btm.v << std::endl;
@@ -503,18 +512,27 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         pxl_right_btm.u = br.x;
         pxl_right_btm.v = br.y;
 
-        if(bPrintDebugMsg > DEBUG)
+        if(bPrintDebugMsg > ERROR)
         {
 			std::cout << "pxl_right_btm X:  "<< pxl_right_btm.u << std::endl;
 			std::cout << "pxl_right_btm Y:  "<< pxl_right_btm.v << std::endl;
         }
 
+
         pxl_left_tp.u = tl.x;
         pxl_left_tp.v = tl.y;
 
-        pxl_right_tp.u = tl.y;
-        pxl_right_tp.v = br.x;
+        pxl_right_tp.u = br.x;
+        pxl_right_tp.v = tl.y;
 
+        if(bPrintDebugMsg > ERROR)
+        {
+        	std::cout << "pxl_left_tp X:  "<< pxl_left_tp.u << std::endl;
+        	std::cout << "pxl_left_tp Y:  "<< pxl_left_tp.v << std::endl;
+        	std::cout << "pxl_right_tp X:  "<< pxl_right_tp.u << std::endl;
+        	std::cout << "pxl_right_tp Y:  "<< pxl_right_tp.v << std::endl;
+
+        }
         // Get world position of the above 3 pixels in world
         world_cntr_btm  = get_world_pos(camera_index,pxl_cntr_btm);
         world_left_btm  = get_world_pos(camera_index,pxl_left_btm);
@@ -526,18 +544,34 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         sample.x = world_cntr_btm.x;
         sample.y = world_cntr_btm.y;
 
-        world_cntr_tp.x = 0.5*(world_left_tp.x+ world_left_tp.x);
-        world_cntr_tp.y = 0.5*(world_left_tp.y+ world_left_tp.y);
+        world_cntr_tp.x = 0.5*(world_right_tp.x+ world_left_tp.x);
+        world_cntr_tp.y = 0.5*(world_right_tp.y+ world_left_tp.y);
 
+
+        if(bPrintDebugMsg > ERROR)
+		{
+        	std::cout << "world_cntr_tp X:  "<<  world_cntr_tp.x << std::endl;
+        	std::cout << "world_cntr_tp Y:  "<< world_cntr_tp.y << std::endl;
+        	std::cout << "world_left_tp X:  "<<  world_left_tp.x << std::endl;
+        	std::cout << "world_left_tp Y:  "<< world_left_tp.y << std::endl;
+        	std::cout << "world_right_tp X:  "<<  world_right_tp.x << std::endl;
+        	std::cout << "world_right_tp Y:  "<< world_right_tp.y << std::endl;
+
+        	std::cout << "world_cntr_btm X:  "<<  world_cntr_btm.x << std::endl;
+			std::cout << "world_cntr_btm Y:  "<< world_cntr_btm.y << std::endl;
+			std::cout << "world_left_btm X:  "<<  world_left_btm.x << std::endl;
+			std::cout << "world_left_btm Y:  "<< world_left_btm.y << std::endl;
+			std::cout << "world_right_btm X:  "<<  world_right_btm.x << std::endl;
+			std::cout << "world_right_btm Y:  "<< world_right_btm.y << std::endl;
+		}
 
 
         sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
         sample.projected_depth = std::abs(world_cntr_tp.x - world_cntr_btm.x);
 
-        if(bPrintDebugMsg > DEBUG)
+        if(bPrintDebugMsg > ERROR)
         {
-			std::cout << "world_right_btm Y:  "<< world_right_btm.y << std::endl;
-			std::cout << "world_left_btm  Y:  "<< world_left_btm.y << std::endl;
+
 			std::cout << "diff  Y:  "<< world_right_btm.y - world_left_btm.y << std::endl;
         }
 
@@ -546,30 +580,41 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
            (sample.projected_depth > registered_sample[index].min_depth &&
         	sample.projected_depth < registered_sample[index].max_depth))
         {
-           	// Push the sample
-			detected_samples.push_back(sample);
 
-			if(bPrintDebugMsg > ERROR)
-			{
-				std::cout << "sample X:  "<< sample.x << std::endl;
-				std::cout << "sample Y:  "<< sample.y << std::endl;
-				std::cout << "sample width:  "<< sample.projected_width << std::endl;
+
+          double dist = sqrt(sample.x*sample.x +  sample.y*sample.y);
+          double expected_area = 6000/dist;
+          if(boundRect[i].area() > expected_area)
+          {
+				std::cout << "accepted sample area: " <<boundRect[i].area() << "expected_area:  " <<expected_area <<std::endl;
+				// Push the sample
+				detected_samples.push_back(sample);
+
+				if (bPrintDebugMsg > ERROR) {
+					std::cout << "sample X:  " << sample.x << std::endl;
+					std::cout << "sample Y:  " << sample.y << std::endl;
+					std::cout << "sample width:  " << sample.projected_width<< std::endl;
+					std::cout << "sample depth:   " << sample.projected_depth<< std::endl;
+				}
+
+				if (out_image != NULL) {
+					Scalar color = Scalar(rng.uniform(0, 255),
+							rng.uniform(0, 255), rng.uniform(0, 255));
+					drawContours(drawing, contours_poly, i, color, 2, 8,
+							hierarchy, 0, Point());
+
+					// Draw a bounding box
+					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),
+							(0, 0, 255), 2, 8, 0);
+				} else {
+					if (bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
+				}
 			}
-
-			if(out_image != NULL)
-			{
-			   Scalar color = Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
-			   drawContours( drawing, contours_poly, i, color, 2, 8, hierarchy, 0, Point() );
-
-			   // Draw a bounding box
-			   rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(), (0,0,255), 2, 8, 0 );
-			} else {
-		    	if(bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
-		    }
-        } else {
-        	if(bPrintDebugMsg > DEBUG)  std::cout << "detected very small sample" <<std::endl;
-        }
-     }
+		} else {
+			if (bPrintDebugMsg > DEBUG)
+				std::cout << "detected very small sample" << std::endl;
+		}
+	}
 
     // Print the number of samples found
     if(bPrintDebugMsg > DEBUG) std::cout << "Number of samples found: "<< detected_samples.size() << std::endl;
@@ -588,8 +633,12 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 
 	Input_image = *imgPtr;
 
+
 	// Convert the color space to HSV
 	cv::cvtColor(Input_image,hsv_image,CV_RGB2Lab);
+	cv::cvtColor(Input_image,Input_image,CV_RGB2BGR);
+
+	cv::imwrite("/home/sarath/input.png",Input_image);
 
 	// Clear detected_sample structure before filling in with new image data
 	detected_samples.clear();
