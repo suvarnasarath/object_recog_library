@@ -72,6 +72,7 @@ int main(int argc, char **argv)
 	std::vector<double>depth{0.05,0.3};
 	register_sample(1,Hue,Sat,Val,width,depth);
 #else
+	/*
 	std::vector<double>L{235,40,0.60};
 	std::vector<double>a{128,20,0.2};
 	std::vector<double>b{128,20,0.2};
@@ -79,6 +80,14 @@ int main(int argc, char **argv)
 	std::vector<double>depth{0.05,10.6};
 	double pixel_dist_factor_white = 6000;
 	register_sample(1,L,a,b,width,depth,pixel_dist_factor_white);
+*/
+	std::vector<double>L_red{123,40,0.0};
+	std::vector<double>a_red{200,60,1.0};
+	std::vector<double>b_red{128,40,0.0};
+	std::vector<double>width_red{0.0,1.0};
+	std::vector<double>depth_red{0.0,10.6};
+	double pixel_dist_factor_red = 600;
+	register_sample(1,L_red,a_red,b_red,width_red,depth_red,pixel_dist_factor_red);
 #endif
 
 

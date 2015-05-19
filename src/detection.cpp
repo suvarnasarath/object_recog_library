@@ -1,8 +1,6 @@
 #include <math.h>
 #include "detection.h"
 
-using namespace cv;
-
 #define MAX_SAMPLES (256)
 #define PI          (3.14159265)
 #define DEFAULT_MAX_DIST (5.0)
@@ -428,8 +426,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     cv::Mat temp_image1, temp_image2;
 
-    std::vector<vector<Point> > contours;
-    std::vector<Vec4i> hierarchy;
+    std::vector<std::vector<cv::Point> > contours;
+    std::vector<cv::Vec4i> hierarchy;
 
     //generate_heat_map_in_HSV(image_hsv,registered_sample[index].hue,registered_sample[index].sat,
     	//						registered_sample[index].val,temp_image1);
@@ -453,25 +451,25 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     //inRange(image_hsv,registered_sample[index].HSV_MIN,registered_sample[index].HSV_MAX,temp_image1);
 
     // Gives the kernel shape for erosion.
-    Mat element = getStructuringElement( MORPH_RECT, Size(2*kernel_size+1,2*kernel_size+1), Point(0,0));
+    cv::Mat element = getStructuringElement( cv::MORPH_RECT, cv::Size(2*kernel_size+1,2*kernel_size+1), cv::Point(0,0));
 
     // Erode the image to get rid of trace elements with similar color to the required sample
     //erode(response,temp_image2,element);
 
     // Find contours in the thresholded image to determine shapes
-    findContours(response,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,Point(0,0));
+    cv::findContours(response,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,cv::Point(0,0));
 
     // Draw all the contours found in the previous step
-    Mat drawing = Mat::zeros( response.size(), CV_8UC3 );
+    cv::Mat drawing = cv::Mat::zeros( response.size(), CV_8UC3 );
 
-    std::vector<vector<Point> > contours_poly( contours.size() );
-    std::vector<Rect> boundRect(contours.size() );
+    std::vector<std::vector<cv::Point> > contours_poly( contours.size() );
+    std::vector<cv::Rect> boundRect(contours.size() );
     for( int i = 0; i < contours.size(); ++i)
      {
-    	const std::vector<Point> & countour = contours_poly[i];
+    	const std::vector<cv::Point> & countour = contours_poly[i];
 
-        approxPolyDP( Mat(contours[i]), contours_poly[i], 5, false );
-        boundRect[i] = boundingRect( Mat(contours_poly[i]) );
+        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 5, false );
+        boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
 
    	    if(boundRect[i].area() < camera_parameters[camera_index].min_bb_area_in_pixels)
 		{
@@ -482,8 +480,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		}
 
          // Get the pixel coordinates of the rectangular bounding box
-        Point tl = boundRect[i].tl();
-        Point br = boundRect[i].br();
+        cv::Point tl = boundRect[i].tl();
+        cv::Point br = boundRect[i].br();
 
         if(bPrintDebugMsg > VERBOSE)
         {
@@ -597,14 +595,12 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 					std::cout << "sample X:  " << sample.x << std::endl;
 					std::cout << "sample Y:  " << sample.y << std::endl;
 					std::cout << "sample width:  " << sample.projected_width<< std::endl;
-					std::cout << "sample depth:   " << sample.projected_depth<< std::endl;
+					std::cout << "sample depth:  " << sample.projected_depth<< std::endl;
 				}
 
 				if (out_image != NULL) {
-					Scalar color = Scalar(rng.uniform(0, 255),
-							rng.uniform(0, 255), rng.uniform(0, 255));
-					drawContours(drawing, contours_poly, i, color, 2, 8,
-							hierarchy, 0, Point());
+					cv::Scalar color = cv::Scalar(rng.uniform(0, 255),rng.uniform(0, 255), rng.uniform(0, 255));
+					cv::drawContours(drawing, contours_poly, i, color, 2, 8,hierarchy, 0, cv::Point());
 
 					// Draw a bounding box
 					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),
