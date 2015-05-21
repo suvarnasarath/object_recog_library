@@ -1,6 +1,12 @@
 #include <math.h>
 #include "detection.h"
 
+#define DEBUG_DUMP
+#define USE_GLOBAL_THRESHOLD   (0)
+#define USE_ADAPTIVE_THRESHOLD (1)
+#define USE_HSV_SPACE		   (0)
+#define USE_LAB_SPACE		   (1)
+
 #ifdef DEBUG_DUMP
 #define DUMP_IMAGE(IMG,FILE) cv::imwrite(FILE,IMG);
 #else
@@ -58,9 +64,9 @@ typedef struct
 typedef struct
 {
 	unsigned int Id;
-	channel_info hue;
-	channel_info sat;
-	channel_info val;
+	channel_info channel1;
+	channel_info channel2;
+	channel_info channel3;
 	double min_width;
 	double max_width;
 	double min_depth;
@@ -180,17 +186,17 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 {
 		REGISTERED_SAMPLE new_sample;
 		new_sample.Id = Id;
-		new_sample.hue.origin = hue_param[0]+0.5;
-		new_sample.hue.deviation = hue_param[1]+0.5;
-		new_sample.hue.weight = hue_param[2];
+		new_sample.channel1.origin = hue_param[0]+0.5;
+		new_sample.channel1.deviation = hue_param[1]+0.5;
+		new_sample.channel1.weight = hue_param[2];
 
-		new_sample.sat.origin = sat_param[0]+0.5;
-		new_sample.sat.deviation = sat_param[1]+0.5;
-		new_sample.sat.weight = sat_param[2];
+		new_sample.channel2.origin = sat_param[0]+0.5;
+		new_sample.channel2.deviation = sat_param[1]+0.5;
+		new_sample.channel2.weight = sat_param[2];
 
-		new_sample.val.origin = val_param[0]+0.5;
-		new_sample.val.deviation = val_param[1]+0.5;
-		new_sample.val.weight = val_param[2];
+		new_sample.channel3.origin = val_param[0]+0.5;
+		new_sample.channel3.deviation = val_param[1]+0.5;
+		new_sample.channel3.weight = val_param[2];
 
 		new_sample.min_width = width[0];
 		new_sample.max_width = width[1];
@@ -421,22 +427,23 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
 
-#ifdef USE_HSV
-    generate_heat_map_in_HSV(image_hsv,registered_sample[index].hue,registered_sample[index].sat,
-    							registered_sample[index].val,heat_map);
-#endif
+#if(USE_HSV_SPACE == 1)
+    generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
+    							registered_sample[index].channel3,heat_map);
+#else if(USE_LAB_SPACE == 1)
 
-    generate_heat_map_LAB(image_hsv,registered_sample[index].hue,registered_sample[index].sat,
-        							registered_sample[index].val,heat_map);
+    generate_heat_map_LAB(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
+        							registered_sample[index].channel3,heat_map);
+#endif
 
     DUMP_IMAGE(heat_map,"/home/sarath/heat_map.png");
 
+#if(USE_GLOBAL_THRESHOLD == 1)
     cv::threshold(heat_map,heat_map,200,255,CV_THRESH_BINARY);
     response.convertTo(heat_map, CV_8UC1);
-
-#ifdef Adaptive
-    //response.convertTo(response, CV_8UC1);
-    //cv::adaptiveThreshold(response,response,255,ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,127,-100);
+#else if(USE_ADAPTIVE_THRESHOLD == 1)
+    response.convertTo(heat_map, CV_8UC1);
+    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,151,-100);
 #endif
 
     DUMP_IMAGE(heat_map,"/home/sarath/thresh_heat_map.png");
@@ -555,10 +562,12 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
         sample.projected_depth = std::abs(world_cntr_tp.x - world_cntr_btm.x);
 
-        if(bPrintDebugMsg > DEBUG)
-        {
-			std::cout << "diff  Y:  "<< world_right_btm.y - world_left_btm.y << std::endl;
-        }
+        if (bPrintDebugMsg > DEBUG) {
+			std::cout << "sample X:  " << sample.x << std::endl;
+			std::cout << "sample Y:  " << sample.y << std::endl;
+			std::cout << "sample width:  " << sample.projected_width<< std::endl;
+			std::cout << "sample depth:  " << sample.projected_depth<< std::endl;
+		}
 
         if((sample.projected_width > registered_sample[index].min_width &&
         	sample.projected_width < registered_sample[index].max_width) &&
@@ -576,13 +585,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 						  << "expected_area:  " <<expected_area <<std::endl;
 				// Push the sample
 				detected_samples.push_back(sample);
-
-				if (bPrintDebugMsg > DEBUG) {
-					std::cout << "sample X:  " << sample.x << std::endl;
-					std::cout << "sample Y:  " << sample.y << std::endl;
-					std::cout << "sample width:  " << sample.projected_width<< std::endl;
-					std::cout << "sample depth:  " << sample.projected_depth<< std::endl;
-				}
 
 				if (out_image != NULL) {
 					cv::Scalar color = cv::Scalar(rng.uniform(0, 255),rng.uniform(0, 255), rng.uniform(0, 255));

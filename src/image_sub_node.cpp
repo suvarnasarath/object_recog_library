@@ -63,7 +63,7 @@ int main(int argc, char **argv)
 	/********************************/
 	/******** Register samples ******/
 	/********************************/
-#if 0
+#ifdef USE_HSV
 	// White sample
 	std::vector<double>Hue{100,10,0.30};
 	std::vector<double>Sat{20,10,0.0};
@@ -72,7 +72,7 @@ int main(int argc, char **argv)
 	std::vector<double>depth{0.05,0.3};
 	register_sample(1,Hue,Sat,Val,width,depth);
 #else
-	/*
+
 	std::vector<double>L{235,40,0.60};
 	std::vector<double>a{128,20,0.2};
 	std::vector<double>b{128,20,0.2};
@@ -80,28 +80,16 @@ int main(int argc, char **argv)
 	std::vector<double>depth{0.05,10.6};
 	double pixel_dist_factor_white = 6000;
 	register_sample(1,L,a,b,width,depth,pixel_dist_factor_white);
-*/
+
 	std::vector<double>L_red{123,40,0.0};
-	std::vector<double>a_red{200,60,1.0};
-	std::vector<double>b_red{128,40,0.0};
-	std::vector<double>width_red{0.0,1.0};
-	std::vector<double>depth_red{0.0,10.6};
+	std::vector<double>a_red{200,60,0.65};
+	std::vector<double>b_red{128,10,0.35};
+	std::vector<double>width_red{0.02,0.2};
+	std::vector<double>depth_red{0.02,0.9};
 	double pixel_dist_factor_red = 600;
-	register_sample(1,L_red,a_red,b_red,width_red,depth_red,pixel_dist_factor_red);
+	register_sample(2,L_red,a_red,b_red,width_red,depth_red,pixel_dist_factor_red);
+
 #endif
-
-
-
-
-	// Old method
-	//AddSampleforDetection(1,165,50,50,175,255,255,0.1,0.5,1,1); // Red hockey puck
-	//AddSampleforDetection(2,20,50,50,30,255,255,0.1,0.5,1,1);   // Yellow PVC pipe
-	//AddSampleforDetection(3,5,50,50,15,255,255,0.1,0.5,1,1);    // Orange PVC pipe
-	//AddSampleforDetection(1,0,0,150,180,60,190,0,1,0,1);        // White hooked sample
-	//AddSampleforDetection(5,0,50,50,5,255,255,0.01,0.2,1,1);    // Pink Tennis Ball
-
-	//std::cout << "sample size = " << get_registered_sample_size() << std::endl;
-
 
 	/********************************/
 	/********* Ros node handle ******/
