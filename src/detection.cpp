@@ -430,7 +430,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 #if(USE_HSV_SPACE == 1)
     generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
     							registered_sample[index].channel3,heat_map);
-#else if(USE_LAB_SPACE == 1)
+#elif(USE_LAB_SPACE == 1)
 
     generate_heat_map_LAB(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
         							registered_sample[index].channel3,heat_map);
@@ -441,7 +441,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 #if(USE_GLOBAL_THRESHOLD == 1)
     cv::threshold(heat_map,heat_map,200,255,CV_THRESH_BINARY);
     response.convertTo(heat_map, CV_8UC1);
-#else if(USE_ADAPTIVE_THRESHOLD == 1)
+#elif(USE_ADAPTIVE_THRESHOLD == 1)
     response.convertTo(heat_map, CV_8UC1);
     cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,151,-100);
 #endif
