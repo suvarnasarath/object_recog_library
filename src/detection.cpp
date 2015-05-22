@@ -16,6 +16,7 @@
 #define DEFAULT_MAX_DIST (1000.0)
 #define MIN_INTENSITY_THRESHOLD_VALUE (160)
 #define Epsilon (0.001)
+#define HU_THRESHOLD (1.05)
 
 // Globals
 cv::RNG rng(12345);  //Used to generate random color for drawing
@@ -73,6 +74,7 @@ typedef struct
 	double max_depth;
 	bool isValid;  // Should we check for this sample in out detector
 	double pixel_dist_factor;
+	std::vector<double>moments;
 }REGISTERED_SAMPLE;
 
 std::vector<REGISTERED_SAMPLE> registered_sample;
@@ -182,6 +184,7 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 									  const std::vector<double>&val_param,
 									  const std::vector<double>width,
 									  const std::vector<double>depth,
+									  const std::vector<double>&moments,
 									  double pixel_dist_factor)
 {
 		REGISTERED_SAMPLE new_sample;
@@ -205,6 +208,7 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 		new_sample.max_depth = depth[1];
 		new_sample.isValid = true; // true by default for all samples
 		new_sample.pixel_dist_factor = pixel_dist_factor;
+		new_sample.moments = moments;
 
 		registered_sample.push_back(new_sample);
 		if(bPrintDebugMsg > ERROR) std::cout<<"added new sample Id = " << Id << std::endl;
@@ -410,8 +414,17 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	out = response;
 }
 
-bool compareHuMoments(double &Sample_Groundtruth,double &Sample)
+bool compareHuMoments(const std::vector<double> &Groundtruth, double *SampleHU)
 {
+	for(int i =0; i < 7 ; i++)
+	{
+		double log_value = std::log10(std::abs(SampleHU[i]));
+		if(std::abs(Groundtruth[i] - log_value) < HU_THRESHOLD) {
+			continue;
+		} else {
+			return false;
+		}
+	}
 	return true;
 }
 
@@ -473,8 +486,15 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         // Compute Moments
         cv::HuMoments(cv::moments(contours[i]),Hu);
+
         // Compare Hu moments of this contour with our stored Hu moments
-        compareHuMoments(registered_sample[index].channel3,Hu);
+        if(compareHuMoments(registered_sample[index].moments,Hu))
+        {
+			std::cout << "Passed Hu test: " << std::endl;
+		} else {
+			//std::cout << "Failed Hu test: " << std::endl;
+			continue;
+		}
 
    	    if(boundRect[i].area() < camera_parameters[camera_index].min_bb_area_in_pixels)
 		{
