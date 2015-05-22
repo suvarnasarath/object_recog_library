@@ -3,9 +3,9 @@
 
 #define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD   (0)
-#define USE_ADAPTIVE_THRESHOLD (1)
+#define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
-#define USE_LAB_SPACE		   (1)
+#define USE_LAB_SPACE		   (!USE_HSV_SPACE)
 
 #ifdef DEBUG_DUMP
 #define DUMP_IMAGE(IMG,FILE) cv::imwrite(FILE,IMG);
@@ -252,12 +252,13 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 	return world_pos;
 }
 
-cv::Mat response;
+
 void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
 									   const channel_info & sat,
 									   const channel_info & val,cv::Mat &out)
 {
 	cv::Mat input = in_hsv;
+	cv::Mat response;
 	// Vector of Mat elements to store H,S,V planes
 	std::vector<cv::Mat> hsv_planes(3);
 
@@ -336,6 +337,7 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 {
 
 	cv::Mat input = in_lab;
+	cv::Mat response;
 	// Vector of Mat elements to store H,S,V planes
 	std::vector<cv::Mat> lab_planes(3);
 
@@ -408,6 +410,11 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	out = response;
 }
 
+bool compareHuMoments(double &Sample_Groundtruth,double &Sample)
+{
+	return true;
+}
+
 bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
 {    
 	bool draw_sample = false;
@@ -426,6 +433,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
+    double Hu[7];
 
 #if(USE_HSV_SPACE == 1)
     generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
@@ -439,11 +447,11 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     DUMP_IMAGE(heat_map,"/home/sarath/heat_map.png");
 
 #if(USE_GLOBAL_THRESHOLD == 1)
-    cv::threshold(heat_map,heat_map,200,255,CV_THRESH_BINARY);
-    response.convertTo(heat_map, CV_8UC1);
+    cv::threshold(heat_map,heat_map,90,255,CV_THRESH_BINARY);
+    heat_map.convertTo(heat_map, CV_8UC1);
 #elif(USE_ADAPTIVE_THRESHOLD == 1)
-    response.convertTo(heat_map, CV_8UC1);
-    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,151,-100);
+    heat_map.convertTo(heat_map, CV_8UC1);
+    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,191,-100);
 #endif
 
     DUMP_IMAGE(heat_map,"/home/sarath/thresh_heat_map.png");
@@ -462,6 +470,11 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 5, false );
         boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
+
+        // Compute Moments
+        cv::HuMoments(cv::moments(contours[i]),Hu);
+        // Compare Hu moments of this contour with our stored Hu moments
+        compareHuMoments(registered_sample[index].channel3,Hu);
 
    	    if(boundRect[i].area() < camera_parameters[camera_index].min_bb_area_in_pixels)
 		{
@@ -593,6 +606,12 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 					// Draw a bounding box
 					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),
 							(0, 0, 255), 2, 8, 0);
+
+					for(int m=0;m<7;m++)
+					{
+						std::cout << "HU-MOMENTS: "<< Hu[m]<< std::endl;
+					}
+
 				} else {
 					if (bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
 				}
@@ -621,7 +640,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 
 	// Convert the color space to HSV
 	cv::cvtColor(Input_image,hsv_image,CV_RGB2Lab);
-	cv::cvtColor(Input_image,Input_image,CV_RGB2BGR);
+	//cv::cvtColor(Input_image,Input_image,CV_RGB2BGR);
 
 	DUMP_IMAGE(Input_image,"/home/sarath/input.png");
 

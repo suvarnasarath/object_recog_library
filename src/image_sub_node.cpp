@@ -3,6 +3,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include "detection.h"
 
+#define SIMULATOR
+
 cv_bridge::CvImagePtr cv_ptr;
 image_transport::Publisher pub;
 
@@ -73,6 +75,10 @@ int main(int argc, char **argv)
 	register_sample(1,Hue,Sat,Val,width,depth);
 #else
 
+#ifndef SIMULATOR
+	/*
+	 * White
+	 */
 	std::vector<double>L{235,40,0.60};
 	std::vector<double>a{128,20,0.20};
 	std::vector<double>b{128,20,0.20};
@@ -81,6 +87,21 @@ int main(int argc, char **argv)
 	double pixel_dist_factor_white = 6000;
 	register_sample(1,L,a,b,width,depth,pixel_dist_factor_white);
 
+#else
+	/*
+	 * White
+	 */
+	std::vector<double>L{235,20,0.40};
+	std::vector<double>a{128,10,0.30};
+	std::vector<double>b{128,10,0.30};
+	std::vector<double>width{0.03,0.3};
+	std::vector<double>depth{0.05,4.6};
+	double pixel_dist_factor_white = 6000;
+	register_sample(1,L,a,b,width,depth,pixel_dist_factor_white);
+#endif
+	/*
+	 * Red
+	 *
 	std::vector<double>L_red{123,40,0.0};
 	std::vector<double>a_red{200,60,0.65};
 	std::vector<double>b_red{128,10,0.35};
@@ -88,6 +109,7 @@ int main(int argc, char **argv)
 	std::vector<double>depth_red{0.02,0.9};
 	double pixel_dist_factor_red = 600;
 	register_sample(2,L_red,a_red,b_red,width_red,depth_red,pixel_dist_factor_red);
+	*/
 
 #endif
 
