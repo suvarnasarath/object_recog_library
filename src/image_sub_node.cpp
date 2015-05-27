@@ -44,7 +44,7 @@ void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S
 int main(int argc, char **argv)
 {
 	// Turn off debug messages.
-	Set_debug(VERBOSE);
+	set_debug(OFF);
 	/*******************************/
 	/******** Register camera ******/
 	/*******************************/
@@ -75,27 +75,6 @@ int main(int argc, char **argv)
 	register_sample(1,Hue,Sat,Val,width,depth);
 #else
 
-#ifndef SIMULATOR
-	/*
-	 * White
-	 */
-	std::vector<double>L{235,40,0.60};
-	std::vector<double>a{128,20,0.20};
-	std::vector<double>b{128,20,0.20};
-	std::vector<double>width{0.03,0.3};
-	std::vector<double>depth{0.05,4.6};
-	double pixel_dist_factor_white = 6000;
-	register_sample(1,L,a,b,width,depth,pixel_dist_factor_white);
-
-#else
-	/*
-	 * White
-	 */
-	std::vector<double>L{235,20,0.40};
-	std::vector<double>a{128,10,0.30};
-	std::vector<double>b{128,10,0.30};
-	std::vector<double>width{0.03,0.3};
-	std::vector<double>depth{0.05,4.6};
 	std::vector<double>moments{ 0.234046,
 								0.015061,
 								0.00422825,
@@ -103,6 +82,29 @@ int main(int argc, char **argv)
 								2.12851e-05,
 								0.00058314,
 								-7.57831e-07};
+
+#ifndef SIMULATOR
+	/*
+	 * White
+	 */
+	std::vector<double>L{235,20,0.6};
+	std::vector<double>a{128,20,0.2};
+	std::vector<double>b{128,20,0.2};
+	std::vector<double>width{0.03,0.3};
+	std::vector<double>depth{0.05,4.6};
+	double pixel_dist_factor_white = 6000;
+	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
+
+#else
+	/*
+	 * White
+	 */
+	std::vector<double>L{235,20,0.40};
+	std::vector<double>a{128,20,0.30};
+	std::vector<double>b{128,20,0.30};
+	std::vector<double>width{0.03,0.3};
+	std::vector<double>depth{0.05,4.6};
+
 	double pixel_dist_factor_white = 6000;
 	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
 #endif

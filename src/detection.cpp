@@ -13,10 +13,12 @@
 #define DUMP_IMAGE(IMG,FILE)
 #endif
 
+#define LOG_TRANSF(X) (((X) < (0)) ? (-1*std::log10(std::abs(X))) : (1*std::log10(std::abs(X))))
+
 #define DEFAULT_MAX_DIST (1000.0)
 #define MIN_INTENSITY_THRESHOLD_VALUE (160)
 #define Epsilon (0.001)
-#define HU_THRESHOLD (1.05)
+#define THRESHOLD (0.5)
 
 // Globals
 cv::RNG rng(12345);  //Used to generate random color for drawing
@@ -84,7 +86,7 @@ std::vector<platform_camera_parameters>camera_parameters;
 /*
  * When enabled, prints debugging messages
  */
-void Set_debug(LOGLEVEL level)
+void set_debug(LOGLEVEL level)
 {
 	bPrintDebugMsg = level;
 	if(bPrintDebugMsg > DEBUG)
@@ -176,6 +178,18 @@ void precompute_world_lookup(unsigned int cameraId)
 	}
 }
 
+std::vector<double> log_transform(std::vector<double> &in)
+{
+	std::vector<double>out(in.size(),0);
+	std::vector<double>::iterator it;
+	for(it=in.begin();it!=in.end();++it)
+	{
+		*it = LOG_TRANSF(*it);
+		out.push_back(*it);
+	}
+	return out;
+}
+
 /*
  * registers a sample to the database
  */
@@ -184,7 +198,7 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 									  const std::vector<double>&val_param,
 									  const std::vector<double>width,
 									  const std::vector<double>depth,
-									  const std::vector<double>&moments,
+									  std::vector<double>&moments,
 									  double pixel_dist_factor)
 {
 		REGISTERED_SAMPLE new_sample;
@@ -208,7 +222,8 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 		new_sample.max_depth = depth[1];
 		new_sample.isValid = true; // true by default for all samples
 		new_sample.pixel_dist_factor = pixel_dist_factor;
-		new_sample.moments = moments;
+
+		new_sample.moments = log_transform(moments);
 
 		registered_sample.push_back(new_sample);
 		if(bPrintDebugMsg > ERROR) std::cout<<"added new sample Id = " << Id << std::endl;
@@ -251,7 +266,8 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 		index = pos.u*camera_parameters[cameraId].Vpixels + pos.v;
 		world_pos = WORLD_LOOKUP[index];
 	} else {
-		if(bPrintDebugMsg > DEBUG) 	std::cout << "image pixel out of range "<< std::endl;
+		if(bPrintDebugMsg > DEBUG)
+			std::cout << "pixel out of range: check camera parameters "<< std::endl;
 	}
 	return world_pos;
 }
@@ -414,12 +430,14 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	out = response;
 }
 
-bool compareHuMoments(const std::vector<double> &Groundtruth, double *SampleHU)
+bool compare_HuMoments(const std::vector<double> &GroundtruthHuMoments, const double *ComputedHuMoments)
 {
+	double Hu_similarity;
 	for(int i =0; i < 7 ; i++)
 	{
-		double log_value = std::log10(std::abs(SampleHU[i]));
-		if(std::abs(Groundtruth[i] - log_value) < HU_THRESHOLD) {
+		Hu_similarity = std::abs(GroundtruthHuMoments[i] - LOG_TRANSF(ComputedHuMoments[i]));
+
+		if(Hu_similarity < THRESHOLD) {
 			continue;
 		} else {
 			return false;
@@ -446,12 +464,12 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
-    double Hu[7];
+    double HuMoments[7];
 
-#if(USE_HSV_SPACE == 1)
+#if(USE_HSV_SPACE)
     generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
     							registered_sample[index].channel3,heat_map);
-#elif(USE_LAB_SPACE == 1)
+#elif(USE_LAB_SPACE)
 
     generate_heat_map_LAB(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
         							registered_sample[index].channel3,heat_map);
@@ -459,12 +477,12 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     DUMP_IMAGE(heat_map,"/home/sarath/heat_map.png");
 
-#if(USE_GLOBAL_THRESHOLD == 1)
+#if(USE_GLOBAL_THRESHOLD)
     cv::threshold(heat_map,heat_map,90,255,CV_THRESH_BINARY);
     heat_map.convertTo(heat_map, CV_8UC1);
-#elif(USE_ADAPTIVE_THRESHOLD == 1)
+#elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
-    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,191,-100);
+    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,213,-100);
 #endif
 
     DUMP_IMAGE(heat_map,"/home/sarath/thresh_heat_map.png");
@@ -484,18 +502,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 5, false );
         boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
 
-        // Compute Moments
-        cv::HuMoments(cv::moments(contours[i]),Hu);
-
-        // Compare Hu moments of this contour with our stored Hu moments
-        if(compareHuMoments(registered_sample[index].moments,Hu))
-        {
-			std::cout << "Passed Hu test: " << std::endl;
-		} else {
-			//std::cout << "Failed Hu test: " << std::endl;
-			continue;
-		}
-
    	    if(boundRect[i].area() < camera_parameters[camera_index].min_bb_area_in_pixels)
 		{
    	    	if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << boundRect[i].area() << std::endl;
@@ -503,6 +509,20 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		} else {
 			if(bPrintDebugMsg > DEBUG)std::cout << "passed area test: " << boundRect[i].area() << std::endl;
 		}
+
+
+   	    // Compute Moments
+        cv::HuMoments(cv::moments(contours[i]),HuMoments);
+
+        // Compare Hu moments of this contour with our stored Hu moments
+        if(compare_HuMoments(registered_sample[index].moments,HuMoments))
+        {
+        	if(bPrintDebugMsg > DEBUG) std::cout << "Passed shape test: " << std::endl;
+		} else {
+			if(bPrintDebugMsg > DEBUG) std::cout << "Failed shape test: " << std::endl;
+			continue;
+		}
+
 
          // Get the pixel coordinates of the rectangular bounding box
         cv::Point tl = boundRect[i].tl();
@@ -626,12 +646,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 					// Draw a bounding box
 					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),
 							(0, 0, 255), 2, 8, 0);
-
-					for(int m=0;m<7;m++)
-					{
-						std::cout << "HU-MOMENTS: "<< Hu[m]<< std::endl;
-					}
-
 				} else {
 					if (bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
 				}
