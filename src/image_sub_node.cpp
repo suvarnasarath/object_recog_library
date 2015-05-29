@@ -3,7 +3,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include "detection.h"
 
-#define SIMULATOR
+//#define SIMULATOR
 
 cv_bridge::CvImagePtr cv_ptr;
 image_transport::Publisher pub;
@@ -17,9 +17,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 		  cv_ptr = cv_bridge::toCvCopy(msg,"rgb8");
 		  cv::Mat * imagePtr = &(cv_ptr->image);
 		  cv::Mat *out_image = &(cv_ptr->image);
-
 		  find_objects(0,imagePtr,out_image,detected_samples);
-		  //std::cout << detected_samples.size() << std::endl;
 		  sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "rgb8", *out_image).toImageMsg();
 		  pub.publish(msg);
 	  } catch (cv_bridge::Exception& e) {
@@ -44,15 +42,15 @@ void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S
 int main(int argc, char **argv)
 {
 	// Turn off debug messages.
-	set_debug(OFF);
+	set_debug(VERBOSE);
 	/*******************************/
 	/******** Register camera ******/
 	/*******************************/
 	platform_camera_parameters param;
-	param.height = 0.7492; //0.65; // height of the camera from ground plane
-	param.pitch = 0.366;//0.65;  // Pitch angle of the camera (up from down)
+	param.height = 0.76385;   // height of the camera from ground plane
+	param.pitch = 0.366;      // Pitch angle of the camera (up from down)
 	param.HFov = 1.3962634;   // Horizontal field of view
-	param.VFov = 0.7853981625;   // Vertical field of view
+	param.VFov = 0.7853981625;// Vertical field of view
 	param.Hpixels = 1920;
 	param.Vpixels = 1080;
 	param.max_detection_dist = 100.0;
@@ -87,11 +85,11 @@ int main(int argc, char **argv)
 	/*
 	 * White
 	 */
-	std::vector<double>L{235,20,0.6};
+	std::vector<double>L{235,40,0.6};
 	std::vector<double>a{128,20,0.2};
 	std::vector<double>b{128,20,0.2};
-	std::vector<double>width{0.03,0.3};
-	std::vector<double>depth{0.05,4.6};
+	std::vector<double>width{0.03,1.3};
+	std::vector<double>depth{0.05,50.6};
 	double pixel_dist_factor_white = 6000;
 	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
 
@@ -117,9 +115,8 @@ int main(int argc, char **argv)
 	std::vector<double>width_red{0.02,0.2};
 	std::vector<double>depth_red{0.02,0.9};
 	double pixel_dist_factor_red = 600;
-	register_sample(2,L_red,a_red,b_red,width_red,depth_red,pixel_dist_factor_red);
-	*/
-
+	register_sample(1,L_red,a_red,b_red,width_red,depth_red,moments,pixel_dist_factor_red);
+*/
 #endif
 
 	/********************************/

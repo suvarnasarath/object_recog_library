@@ -7,6 +7,9 @@
 #define USE_HSV_SPACE		   (0)
 #define USE_LAB_SPACE		   (!USE_HSV_SPACE)
 
+#define ENABLE_DEPTH_TEST	   (0)
+#define ENABLE_SHAPE_TEST	   (0)
+
 #ifdef DEBUG_DUMP
 #define DUMP_IMAGE(IMG,FILE) cv::imwrite(FILE,IMG);
 #else
@@ -464,7 +467,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
-    double HuMoments[7];
+    double HuMoments[7],contour_area;
 
 #if(USE_HSV_SPACE)
     generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
@@ -482,7 +485,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     heat_map.convertTo(heat_map, CV_8UC1);
 #elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
-    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,213,-100);
+    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,151,-100);
 #endif
 
     DUMP_IMAGE(heat_map,"/home/sarath/thresh_heat_map.png");
@@ -495,22 +498,25 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     std::vector<std::vector<cv::Point> > contours_poly( contours.size() );
     std::vector<cv::Rect> boundRect(contours.size() );
+
     for( int i = 0; i < contours.size(); ++i)
      {
     	const std::vector<cv::Point> & countour = contours_poly[i];
 
-        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 5, false );
+        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 25.0, true );
         boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
 
-   	    if(boundRect[i].area() < camera_parameters[camera_index].min_bb_area_in_pixels)
+        contour_area = cv::contourArea(contours[i]);
+
+   	    if(contour_area < camera_parameters[camera_index].min_bb_area_in_pixels)
 		{
-   	    	if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << boundRect[i].area() << std::endl;
+   	    	if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
 			continue;
 		} else {
-			if(bPrintDebugMsg > DEBUG)std::cout << "passed area test: " << boundRect[i].area() << std::endl;
+			if(bPrintDebugMsg > DEBUG)std::cout << "passed area test: " << contour_area << std::endl;
 		}
 
-
+#if ENABLE_SHAPE_TEST
    	    // Compute Moments
         cv::HuMoments(cv::moments(contours[i]),HuMoments);
 
@@ -522,7 +528,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 			if(bPrintDebugMsg > DEBUG) std::cout << "Failed shape test: " << std::endl;
 			continue;
 		}
-
+#endif
 
          // Get the pixel coordinates of the rectangular bounding box
         cv::Point tl = boundRect[i].tl();
@@ -540,8 +546,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(bPrintDebugMsg > DEBUG)
         {
-			std::cout << "pxl_cntr_btm X:  "<< pxl_cntr_btm.u << std::endl;
-			std::cout << "pxl_cntr_btm Y:  "<< pxl_cntr_btm.v << std::endl;
+			std::cout << "pxl_cntr_btm X: "<< pxl_cntr_btm.u <<" , "
+					  << "pxl_cntr_btm Y: "<< pxl_cntr_btm.v <<std::endl;
         }
 
         // Left point of the bounding box bottom side
@@ -550,8 +556,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(bPrintDebugMsg > DEBUG)
         {
-			std::cout << "pxl_left_btm X:  "<< pxl_left_btm.u << std::endl;
-			std::cout << "pxl_left_btm Y:  "<< pxl_left_btm.v << std::endl;
+			std::cout << "pxl_left_btm X:  "<< pxl_left_btm.u <<" , "
+					  << "pxl_left_btm Y:  "<< pxl_left_btm.v << std::endl;
         }
 
         // Left point of the bounding box bottom side
@@ -560,8 +566,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(bPrintDebugMsg > DEBUG)
         {
-			std::cout << "pxl_right_btm X:  "<< pxl_right_btm.u << std::endl;
-			std::cout << "pxl_right_btm Y:  "<< pxl_right_btm.v << std::endl;
+			std::cout << "pxl_right_btm X:  "<< pxl_right_btm.u <<" , "
+			          << "pxl_right_btm Y:  "<< pxl_right_btm.v << std::endl;
         }
 
 
@@ -573,10 +579,11 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(bPrintDebugMsg > DEBUG)
         {
-        	std::cout << "pxl_left_tp X:  "<< pxl_left_tp.u << std::endl;
-        	std::cout << "pxl_left_tp Y:  "<< pxl_left_tp.v << std::endl;
-        	std::cout << "pxl_right_tp X:  "<< pxl_right_tp.u << std::endl;
-        	std::cout << "pxl_right_tp Y:  "<< pxl_right_tp.v << std::endl;
+        	std::cout << "pxl_left_tp X:  "<< pxl_left_tp.u <<" , "
+        			  << "pxl_left_tp Y:  "<< pxl_left_tp.v << std::endl;
+
+        	std::cout << "pxl_right_tp X:  "<< pxl_right_tp.u <<" , "
+        			  << "pxl_right_tp Y:  "<< pxl_right_tp.v << std::endl;
 
         }
         // Get world position of the above 3 pixels in world
@@ -596,19 +603,23 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(bPrintDebugMsg > DEBUG)
 		{
-        	std::cout << "world_cntr_tp X:  "<<  world_cntr_tp.x << std::endl;
-        	std::cout << "world_cntr_tp Y:  "<< world_cntr_tp.y << std::endl;
-        	std::cout << "world_left_tp X:  "<<  world_left_tp.x << std::endl;
-        	std::cout << "world_left_tp Y:  "<< world_left_tp.y << std::endl;
-        	std::cout << "world_right_tp X:  "<<  world_right_tp.x << std::endl;
-        	std::cout << "world_right_tp Y:  "<< world_right_tp.y << std::endl;
+        	std::cout << "world_cntr_tp X:  "<<  world_cntr_tp.x <<" , "
+        			  << "world_cntr_tp Y:  "<< world_cntr_tp.y << std::endl;
 
-        	std::cout << "world_cntr_btm X:  "<<  world_cntr_btm.x << std::endl;
-			std::cout << "world_cntr_btm Y:  "<< world_cntr_btm.y << std::endl;
-			std::cout << "world_left_btm X:  "<<  world_left_btm.x << std::endl;
-			std::cout << "world_left_btm Y:  "<< world_left_btm.y << std::endl;
-			std::cout << "world_right_btm X:  "<<  world_right_btm.x << std::endl;
-			std::cout << "world_right_btm Y:  "<< world_right_btm.y << std::endl;
+        	std::cout << "world_left_tp X:  "<<  world_left_tp.x <<" , "
+        			  << "world_left_tp Y:  "<< world_left_tp.y << std::endl;
+
+        	std::cout << "world_right_tp X:  "<<  world_right_tp.x <<" , "
+        			  << "world_right_tp Y:  "<< world_right_tp.y << std::endl;
+
+        	std::cout << "world_cntr_btm X:  "<<  world_cntr_btm.x <<" , "
+        			  << "world_cntr_btm Y:  "<< world_cntr_btm.y << std::endl;
+
+			std::cout << "world_left_btm X:  "<<  world_left_btm.x <<" , "
+					  << "world_left_btm Y:  "<< world_left_btm.y << std::endl;
+
+			std::cout << "world_right_btm X:  "<<  world_right_btm.x <<" , "
+					  << "world_right_btm Y:  "<< world_right_btm.y << std::endl;
 		}
 
 
@@ -616,25 +627,30 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         sample.projected_depth = std::abs(world_cntr_tp.x - world_cntr_btm.x);
 
         if (bPrintDebugMsg > DEBUG) {
-			std::cout << "sample X:  " << sample.x << std::endl;
-			std::cout << "sample Y:  " << sample.y << std::endl;
+			std::cout << "sample X:  " << sample.x  <<" , "
+					  << "sample Y:  " << sample.y  << std::endl;
+
 			std::cout << "sample width:  " << sample.projected_width<< std::endl;
 			std::cout << "sample depth:  " << sample.projected_depth<< std::endl;
 		}
 
         if((sample.projected_width > registered_sample[index].min_width &&
-        	sample.projected_width < registered_sample[index].max_width) &&
+        	sample.projected_width < registered_sample[index].max_width)
+#if ENABLE_DEPTH_TEST
+        		&&
            (sample.projected_depth > registered_sample[index].min_depth &&
-        	sample.projected_depth < registered_sample[index].max_depth))
+        	sample.projected_depth < registered_sample[index].max_depth)
+#endif
+        	)
         {
 
 
           double dist = std::max(std::sqrt(sample.x*sample.x +  sample.y*sample.y),1.0);
           double expected_area = registered_sample[index].pixel_dist_factor/dist;
-          if(boundRect[i].area() > expected_area)
+          if(contour_area > expected_area)
           {
         	  if(bPrintDebugMsg > DEBUG)
-        		  std::cout << "accepted sample area: " <<boundRect[i].area()
+        		  std::cout << "accepted sample area: " << contour_area << " "
 						  << "expected_area:  " <<expected_area <<std::endl;
 				// Push the sample
 				detected_samples.push_back(sample);
