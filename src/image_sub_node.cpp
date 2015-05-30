@@ -3,7 +3,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include "detection.h"
 
-//#define SIMULATOR
+#define SIMULATOR
 
 cv_bridge::CvImagePtr cv_ptr;
 image_transport::Publisher pub;
