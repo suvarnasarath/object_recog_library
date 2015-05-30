@@ -60,7 +60,7 @@ int main(int argc, char **argv)
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
 	param.yaw = 0;
-	param.min_bb_area_in_pixels =400;
+	param.min_bb_area_in_pixels =50;
 	register_camera(0,&param);
 
 	/********************************/
@@ -91,9 +91,9 @@ int main(int argc, char **argv)
 	std::vector<double>L{235,40,0.6};
 	std::vector<double>a{128,20,0.2};
 	std::vector<double>b{128,20,0.2};
-	std::vector<double>width{0.03,1.3};
+	std::vector<double>width{0.03,0.3};
 	std::vector<double>depth{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_white = 6000;
+	double pixel_dist_factor_white = 2000;
 	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
 
 #else
@@ -115,7 +115,7 @@ int main(int argc, char **argv)
 	std::vector<double>L_red{123,40,0.0};
 	std::vector<double>a_red{200,60,0.65};
 	std::vector<double>b_red{128,10,0.35};
-	std::vector<double>width_red{0.02,0.2};
+	std::vector<double>width_red{0.02,0.25};
 	std::vector<double>depth_red{MIN_DEPTH,MAX_DEPTH};
 	double pixel_dist_factor_red = 600;
 	register_sample(2,L_red,a_red,b_red,width_red,depth_red,moments,pixel_dist_factor_red);
@@ -123,24 +123,24 @@ int main(int argc, char **argv)
 	/*
 	 * Yellow
 	 */
-	std::vector<double>L_yellow{160,40,0.50};
-	std::vector<double>a_yellow{112,20,0.25};
-	std::vector<double>b_yellow{180,10,0.50};
-	std::vector<double>width_yellow{0.02,0.2};
+	std::vector<double>L_yellow{160,40,0.34};
+	std::vector<double>a_yellow{128,20,0.33};
+	std::vector<double>b_yellow{180,10,0.33};
+	std::vector<double>width_yellow{0.02,0.3};
 	std::vector<double>depth_yellow{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_yellow = 600;
+	double pixel_dist_factor_yellow = 60;
 	register_sample(3,L_yellow,a_yellow,b_yellow,width_yellow,depth_yellow,moments,pixel_dist_factor_yellow);
 
 	/*
 	 * Orange
 	 */
-	std::vector<double>L_orange{80,20,0.45};
-	std::vector<double>a_orange{140,20,0.45};
+	std::vector<double>L_orange{100,20,0.40};
+	std::vector<double>a_orange{160,10,0.50};
 	std::vector<double>b_orange{160,10,0.10};
-	std::vector<double>width_orange{0.04,0.2};
+	std::vector<double>width_orange{0.02,0.5};
 	std::vector<double>depth_orange{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_orange = 600;
-	register_sample(1,L_orange,a_orange,b_orange,width_orange,depth_orange,moments,pixel_dist_factor_orange);
+	double pixel_dist_factor_orange = 60;
+	register_sample(4,L_orange,a_orange,b_orange,width_orange,depth_orange,moments,pixel_dist_factor_orange);
 
 #endif
 

@@ -503,7 +503,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
      {
     	const std::vector<cv::Point> & countour = contours_poly[i];
 
-        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 25.0, true );
+        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 5.0, false );
         boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
 
         contour_area = cv::contourArea(contours[i]);
