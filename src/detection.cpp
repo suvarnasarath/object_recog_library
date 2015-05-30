@@ -503,14 +503,14 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
      {
     	const std::vector<cv::Point> & countour = contours_poly[i];
 
-        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 25.0, true );
+        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 5.0, false );
         boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
 
         contour_area = cv::contourArea(contours[i]);
 
    	    if(contour_area < camera_parameters[camera_index].min_bb_area_in_pixels)
 		{
-   	    	if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
+   	    	//if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
 			continue;
 		} else {
 			if(bPrintDebugMsg > DEBUG)std::cout << "passed area test: " << contour_area << std::endl;
@@ -546,8 +546,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(bPrintDebugMsg > DEBUG)
         {
-			std::cout << "pxl_cntr_btm X: "<< pxl_cntr_btm.u <<" , "
-					  << "pxl_cntr_btm Y: "<< pxl_cntr_btm.v <<std::endl;
+			std::cout << "pxl_cntr_btm:("<< pxl_cntr_btm.u <<","<< pxl_cntr_btm.v << ")"<<std::endl;
         }
 
         // Left point of the bounding box bottom side
@@ -556,8 +555,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(bPrintDebugMsg > DEBUG)
         {
-			std::cout << "pxl_left_btm X:  "<< pxl_left_btm.u <<" , "
-					  << "pxl_left_btm Y:  "<< pxl_left_btm.v << std::endl;
+			std::cout << "pxl_left_btm:("<< pxl_left_btm.u <<","<< pxl_left_btm.v <<")" <<std::endl;
         }
 
         // Left point of the bounding box bottom side
@@ -566,8 +564,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(bPrintDebugMsg > DEBUG)
         {
-			std::cout << "pxl_right_btm X:  "<< pxl_right_btm.u <<" , "
-			          << "pxl_right_btm Y:  "<< pxl_right_btm.v << std::endl;
+			std::cout << "pxl_right_btm:("<< pxl_right_btm.u <<","<< pxl_right_btm.v <<")" <<std::endl;
         }
 
 
@@ -579,11 +576,9 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(bPrintDebugMsg > DEBUG)
         {
-        	std::cout << "pxl_left_tp X:  "<< pxl_left_tp.u <<" , "
-        			  << "pxl_left_tp Y:  "<< pxl_left_tp.v << std::endl;
+        	std::cout << "pxl_left_tp:("<< pxl_left_tp.u <<","<< pxl_left_tp.v <<")"<<std::endl;
 
-        	std::cout << "pxl_right_tp X:  "<< pxl_right_tp.u <<" , "
-        			  << "pxl_right_tp Y:  "<< pxl_right_tp.v << std::endl;
+        	std::cout << "pxl_right_tp:("<< pxl_right_tp.u <<" , "<< pxl_right_tp.v <<")" <<std::endl;
 
         }
         // Get world position of the above 3 pixels in world
@@ -603,23 +598,12 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(bPrintDebugMsg > DEBUG)
 		{
-        	std::cout << "world_cntr_tp X:  "<<  world_cntr_tp.x <<" , "
-        			  << "world_cntr_tp Y:  "<< world_cntr_tp.y << std::endl;
-
-        	std::cout << "world_left_tp X:  "<<  world_left_tp.x <<" , "
-        			  << "world_left_tp Y:  "<< world_left_tp.y << std::endl;
-
-        	std::cout << "world_right_tp X:  "<<  world_right_tp.x <<" , "
-        			  << "world_right_tp Y:  "<< world_right_tp.y << std::endl;
-
-        	std::cout << "world_cntr_btm X:  "<<  world_cntr_btm.x <<" , "
-        			  << "world_cntr_btm Y:  "<< world_cntr_btm.y << std::endl;
-
-			std::cout << "world_left_btm X:  "<<  world_left_btm.x <<" , "
-					  << "world_left_btm Y:  "<< world_left_btm.y << std::endl;
-
-			std::cout << "world_right_btm X:  "<<  world_right_btm.x <<" , "
-					  << "world_right_btm Y:  "<< world_right_btm.y << std::endl;
+        	std::cout << "world_cntr_tp:("<<  world_cntr_tp.x <<","<< world_cntr_tp.y <<")" << std::endl;
+        	std::cout << "world_left_tp:("<<  world_left_tp.x <<","<< world_left_tp.y <<")" << std::endl;
+        	std::cout << "world_right_tp:("<<  world_right_tp.x <<"," << world_right_tp.y <<")" << std::endl;
+        	std::cout << "world_cntr_btm:("<<  world_cntr_btm.x <<","<< world_cntr_btm.y <<")" << std::endl;
+			std::cout << "world_left_btm:("<<  world_left_btm.x <<"," << world_left_btm.y <<")" << std::endl;
+			std::cout << "world_right_btm:( "<<  world_right_btm.x <<"," << world_right_btm.y <<")" << std::endl;
 		}
 
 
@@ -627,8 +611,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         sample.projected_depth = std::abs(world_cntr_tp.x - world_cntr_btm.x);
 
         if (bPrintDebugMsg > DEBUG) {
-			std::cout << "sample X:  " << sample.x  <<" , "
-					  << "sample Y:  " << sample.y  << std::endl;
+			std::cout << "sample:(" << sample.x  <<","<< sample.y  <<")" <<std::endl;
 
 			std::cout << "sample width:  " << sample.projected_width<< std::endl;
 			std::cout << "sample depth:  " << sample.projected_depth<< std::endl;
