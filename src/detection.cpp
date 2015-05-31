@@ -463,7 +463,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 	// sample index is same for all samples this call
 	sample.id = index;
 
-    cv::Mat heat_map, temp_image2;
+    cv::Mat heat_map, temp_image2, erosion_dst, dilation_dst;
 
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
@@ -485,10 +485,27 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     heat_map.convertTo(heat_map, CV_8UC1);
 #elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
-    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,151,-100);
+    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,351,-100);
 #endif
 
     DUMP_IMAGE(heat_map,"/home/sarath/thresh_heat_map.png");
+
+    int erosion_size = 12;
+	int dilation_size = 12;
+
+	// erode and dilate
+	cv::Mat erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
+										 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
+										 cv::Point( erosion_size, erosion_size ) );
+	cv::erode(heat_map,erosion_dst,erosion_element);
+	DUMP_IMAGE(heat_map,"/home/sarath/erosion_out.png");
+	cv::Mat dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
+											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
+											 cv::Point( dilation_size, dilation_size ) );
+
+	cv::dilate(erosion_dst,heat_map,dilation_element);
+	DUMP_IMAGE(heat_map,"/home/sarath/dilation_out.png");
+
 
     // Find contours in the thresholded image to determine shapes
     cv::findContours(heat_map,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,cv::Point(0,0));
@@ -503,14 +520,14 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
      {
     	const std::vector<cv::Point> & countour = contours_poly[i];
 
-        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 5.0, false );
+        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 2.0, true );
         boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
 
         contour_area = cv::contourArea(contours[i]);
 
    	    if(contour_area < camera_parameters[camera_index].min_bb_area_in_pixels)
 		{
-   	    	//if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
+   	    	if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
 			continue;
 		} else {
 			if(bPrintDebugMsg > DEBUG)std::cout << "passed area test: " << contour_area << std::endl;
@@ -577,9 +594,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         if(bPrintDebugMsg > DEBUG)
         {
         	std::cout << "pxl_left_tp:("<< pxl_left_tp.u <<","<< pxl_left_tp.v <<")"<<std::endl;
-
         	std::cout << "pxl_right_tp:("<< pxl_right_tp.u <<" , "<< pxl_right_tp.v <<")" <<std::endl;
-
         }
         // Get world position of the above 3 pixels in world
         world_cntr_btm  = get_world_pos(camera_index,pxl_cntr_btm);
@@ -627,8 +642,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         	)
         {
 
-
-          double dist = std::max(std::sqrt(sample.x*sample.x +  sample.y*sample.y),1.0);
+          double height = camera_parameters[camera_index].height * camera_parameters[camera_index].height;
+          double dist = std::max(std::sqrt(sample.x*sample.x +  sample.y*sample.y + height),1.0);
           double expected_area = registered_sample[index].pixel_dist_factor/dist;
           if(contour_area > expected_area)
           {
@@ -643,10 +658,15 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 					cv::drawContours(drawing, contours_poly, i, color, 2, 8,hierarchy, 0, cv::Point());
 
 					// Draw a bounding box
-					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),
-							(0, 0, 255), 2, 8, 0);
+					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
 				} else {
 					if (bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
+				}
+			} else {
+				if (bPrintDebugMsg > DEBUG) {
+					std::cout << "detected small contour" << std::endl;
+					std::cout << "accepted sample area: " << contour_area << " "
+										  << "expected_area:  " <<expected_area <<std::endl;
 				}
 			}
 		} else {
