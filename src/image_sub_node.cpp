@@ -60,7 +60,7 @@ int main(int argc, char **argv)
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
 	param.yaw = 0;
-	param.min_bb_area_in_pixels =50;
+	param.min_bb_area_in_pixels =1600;
 	register_camera(0,&param);
 
 	/********************************/
@@ -88,12 +88,12 @@ int main(int argc, char **argv)
 	/*
 	 * White
 	 */
-	std::vector<double>L{235,40,0.6};
-	std::vector<double>a{128,20,0.2};
-	std::vector<double>b{128,20,0.2};
-	std::vector<double>width{0.03,0.3};
+	std::vector<double>L{235,30,0.6};
+	std::vector<double>a{128,20,0.1};
+	std::vector<double>b{128,40,0.3};
+	std::vector<double>width{0.03,2.0};
 	std::vector<double>depth{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_white = 2000;
+	double pixel_dist_factor_white = 12000;
 	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
 
 #else
@@ -103,7 +103,7 @@ int main(int argc, char **argv)
 	std::vector<double>L{235,20,0.40};
 	std::vector<double>a{128,20,0.30};
 	std::vector<double>b{128,20,0.30};
-	std::vector<double>width{0.03,0.3};
+	std::vector<double>width{0.03,1.5};
 	std::vector<double>depth{0.05,4.6};
 
 	double pixel_dist_factor_white = 6000;
@@ -111,7 +111,7 @@ int main(int argc, char **argv)
 #endif
 	/*
 	 * Red
-	 */
+	 *
 	std::vector<double>L_red{123,40,0.0};
 	std::vector<double>a_red{200,60,0.65};
 	std::vector<double>b_red{128,10,0.35};
@@ -122,7 +122,7 @@ int main(int argc, char **argv)
 
 	/*
 	 * Yellow
-	 */
+	 *
 	std::vector<double>L_yellow{160,40,0.34};
 	std::vector<double>a_yellow{128,20,0.33};
 	std::vector<double>b_yellow{180,10,0.33};
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
 
 	/*
 	 * Orange
-	 */
+	 *
 	std::vector<double>L_orange{100,20,0.40};
 	std::vector<double>a_orange{160,10,0.50};
 	std::vector<double>b_orange{160,10,0.10};
@@ -141,7 +141,7 @@ int main(int argc, char **argv)
 	std::vector<double>depth_orange{MIN_DEPTH,MAX_DEPTH};
 	double pixel_dist_factor_orange = 60;
 	register_sample(4,L_orange,a_orange,b_orange,width_orange,depth_orange,moments,pixel_dist_factor_orange);
-
+*/
 #endif
 
 	/********************************/
