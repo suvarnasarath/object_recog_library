@@ -88,12 +88,12 @@ int main(int argc, char **argv)
 	/*
 	 * White
 	 */
-	std::vector<double>L{235,30,0.6};
+	std::vector<double>L{190,60,0.6};
 	std::vector<double>a{128,20,0.1};
 	std::vector<double>b{128,40,0.3};
 	std::vector<double>width{0.03,2.0};
 	std::vector<double>depth{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_white = 12000;
+	double pixel_dist_factor_white = 8000;
 	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
 
 #else

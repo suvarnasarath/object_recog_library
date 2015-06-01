@@ -2,13 +2,14 @@
 #include "detection.h"
 
 #define DEBUG_DUMP
-#define USE_GLOBAL_THRESHOLD   (0)
+#define USE_GLOBAL_THRESHOLD   (1)
 #define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
 #define USE_LAB_SPACE		   (!USE_HSV_SPACE)
 
 #define ENABLE_DEPTH_TEST	   (0)
 #define ENABLE_SHAPE_TEST	   (0)
+#define ENABLE_TEXTURE_TEST    (1)
 
 #ifdef DEBUG_DUMP
 #define DUMP_IMAGE(IMG,FILE) cv::imwrite(FILE,IMG);
@@ -275,6 +276,31 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 	return world_pos;
 }
 
+void GetTextureImage(cv::Mat &src, cv::Mat &dst)
+{
+	/// Generate grad_x and grad_y
+	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
+	cv::Mat abs_grad_x, abs_grad_y;
+	int scale = 1;
+	int delta = 0;
+	int ddepth = -1;
+
+	/// Gradient X
+	cv::Sobel( src, grad_x, ddepth, 1, 0, 7, scale, delta, cv::BORDER_DEFAULT );
+	cv::convertScaleAbs( grad_x, abs_grad_x );
+
+	/// Gradient Y
+	cv::Sobel( src, grad_y, ddepth, 0, 1, 7, scale, delta, cv::BORDER_DEFAULT );
+	cv::convertScaleAbs( grad_y, abs_grad_y );
+
+	/// Total Gradient (approximate)
+	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst );
+
+	cv::medianBlur(dst,smoothed_image,9);
+	cv::normalize(smoothed_image,normalized_image,128.0,255.0,cv::NORM_MINMAX);
+	cv::subtract(255.0,normalized_image,dst);
+}
+
 
 void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
 									   const channel_info & sat,
@@ -360,7 +386,7 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 {
 
 	cv::Mat input = in_lab;
-	cv::Mat response;
+	cv::Mat response,L_median;
 	// Vector of Mat elements to store H,S,V planes
 	std::vector<cv::Mat> lab_planes(3);
 
@@ -373,6 +399,12 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	DUMP_IMAGE(L_channel,"/home/sarath/L.png");
 	DUMP_IMAGE(a_channel,"/home/sarath/a.png");
 	DUMP_IMAGE(b_channel,"/home/sarath/b.png");
+
+	//GetTextureImage(a_channel);
+	//GetTextureImage(L_channel);
+
+	//cv::medianBlur(L_channel,L_channel,7);
+	//DUMP_IMAGE(L_channel,"/home/sarath/L_median.png");
 
 	response = cv::Mat::zeros(L_channel.rows,L_channel.cols,CV_32FC1);
 
@@ -449,7 +481,8 @@ bool compare_HuMoments(const std::vector<double> &GroundtruthHuMoments, const do
 	return true;
 }
 
-bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image, int index,std::vector<DETECTED_SAMPLE> &detected_samples)
+bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image,
+				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,cv::Mat texture_image)
 {    
 	bool draw_sample = false;
 	DETECTED_SAMPLE sample;
@@ -463,7 +496,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 	// sample index is same for all samples this call
 	sample.id = index;
 
-    cv::Mat heat_map, temp_image2, erosion_dst, dilation_dst;
+    cv::Mat heat_map, sobel_out, erosion_dst, dilation_dst;
 
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
@@ -480,16 +513,22 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     DUMP_IMAGE(heat_map,"/home/sarath/heat_map.png");
 
+    if(texture_image.data)
+    {
+    	cv::multiply(texture_image,heat_map,heat_map,1/255.0,CV_32FC1);
+    }
+    DUMP_IMAGE(heat_map,"/home/sarath/heat_map_mul.png");
+
 #if(USE_GLOBAL_THRESHOLD)
     cv::threshold(heat_map,heat_map,90,255,CV_THRESH_BINARY);
     heat_map.convertTo(heat_map, CV_8UC1);
 #elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
-    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,351,-100);
+    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,31,-200);
 #endif
-
     DUMP_IMAGE(heat_map,"/home/sarath/thresh_heat_map.png");
 
+/*
     int erosion_size = 12;
 	int dilation_size = 12;
 
@@ -505,8 +544,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
 	cv::dilate(erosion_dst,heat_map,dilation_element);
 	DUMP_IMAGE(heat_map,"/home/sarath/dilation_out.png");
-
-
+*/
     // Find contours in the thresholded image to determine shapes
     cv::findContours(heat_map,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,cv::Point(0,0));
 
@@ -645,6 +683,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
           double height = camera_parameters[camera_index].height * camera_parameters[camera_index].height;
           double dist = std::max(std::sqrt(sample.x*sample.x +  sample.y*sample.y + height),1.0);
           double expected_area = registered_sample[index].pixel_dist_factor/dist;
+          //contour_area = contour_area*10;
           if(contour_area > expected_area)
           {
         	  if(bPrintDebugMsg > DEBUG)
@@ -683,7 +722,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
 void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
-	cv::Mat hsv_image;
+	cv::Mat lab_image,src_gray,texture_out;
 	if(! imgPtr->data) {
 		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
@@ -692,11 +731,14 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	Input_image = *imgPtr;
 
 	// Convert the color space to HSV
-	cv::cvtColor(Input_image,hsv_image,CV_RGB2Lab);
-	//cv::cvtColor(Input_image,Input_image,CV_RGB2BGR);
-
+	cv::cvtColor(Input_image,lab_image,CV_RGB2Lab);
 	DUMP_IMAGE(Input_image,"/home/sarath/input.png");
 
+#ifdef ENABLE_TEXTURE_TEST
+	cv::cvtColor(Input_image,src_gray,CV_RGB2GRAY);
+	GetTextureImage(src_gray,texture_out);
+	DUMP_IMAGE(texture_out,"/home/sarath/texture_out.png");
+#endif
 	// Clear detected_samples structure before filling in with new image data
 	detected_samples.clear();
 
@@ -705,7 +747,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	{
 		if(registered_sample[index].isValid)
 		{
-		  process_image(camera_index,hsv_image, out_image,index,detected_samples);
+		  process_image(camera_index,lab_image, out_image,index,detected_samples,texture_out);
 		}
 	}
 }
