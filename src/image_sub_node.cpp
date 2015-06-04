@@ -60,7 +60,7 @@ int main(int argc, char **argv)
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
 	param.yaw = 0;
-	param.min_bb_area_in_pixels =1600;
+	param.min_bb_area_in_pixels =2000;
 	register_camera(0,&param);
 
 	/********************************/
@@ -88,7 +88,7 @@ int main(int argc, char **argv)
 	/*
 	 * White
 	 */
-	std::vector<double>L{100,30,0.6};
+	std::vector<double>L{200,55,0.6};
 	std::vector<double>a{128,20,0.1};
 	std::vector<double>b{128,30,0.3};
 	std::vector<double>width{0.03,0.3};
@@ -134,12 +134,12 @@ int main(int argc, char **argv)
 	/*
 	 * Orange
 	 *
-	std::vector<double>L_orange{100,20,0.40};
-	std::vector<double>a_orange{160,10,0.50};
-	std::vector<double>b_orange{160,10,0.10};
-	std::vector<double>width_orange{0.02,0.5};
+	std::vector<double>L_orange{160,20,0.34};
+	std::vector<double>a_orange{160,20,0.33};
+	std::vector<double>b_orange{160,20,0.33};
+	std::vector<double>width_orange{0.02,0.3};
 	std::vector<double>depth_orange{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_orange = 60;
+	double pixel_dist_factor_orange = 6000;
 	register_sample(4,L_orange,a_orange,b_orange,width_orange,depth_orange,moments,pixel_dist_factor_orange);
 */
 #endif

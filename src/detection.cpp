@@ -3,7 +3,7 @@
 #include <time.h>
 
 #define DEBUG_DUMP
-#define USE_GLOBAL_THRESHOLD   (0)
+#define USE_GLOBAL_THRESHOLD   (1)
 #define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
 #define USE_LAB_SPACE		   (!USE_HSV_SPACE)
@@ -11,6 +11,7 @@
 #define ENABLE_DEPTH_TEST	   (0)
 #define ENABLE_SHAPE_TEST	   (0)
 #define ENABLE_TEXTURE_TEST    (1)
+#define ENABLE_TIMING		   (1)
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
 // At the current pitch, tray is in the way causing reflections and thus false detections.
@@ -29,8 +30,14 @@
 #define Epsilon (0.001)
 #define THRESHOLD (0.5)
 
-// Globals
-int kernel_size = 2;
+#define CLOCKS_PER_SEC  1000000l
+#define CLOCKS_PER_MS   (CLOCKS_PER_SEC/1000)
+void Display_time(clock_t time_elapsed)
+{
+	std::cout << "-------------------------" << std::endl;
+	std::cout<<"Total time: "<< time_elapsed <<std::endl;
+	std::cout << "-------------------------" << std::endl;
+}
 
 // Set debug messages OFF by default
 LOGLEVEL bPrintDebugMsg = OFF;
@@ -299,11 +306,15 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 
 	/// Total Gradient (approximate)
 	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst );
+	DUMP_IMAGE(dst,"/home/sarath/texture_derivative_out.png");
 
-	cv::medianBlur(dst,smoothed_image,79);
-	cv::normalize(smoothed_image,normalized_image,128.0,255.0,cv::NORM_MINMAX);
+	cv::medianBlur(dst,smoothed_image,39);
+	DUMP_IMAGE(smoothed_image,"/home/sarath/texture_median_out.png");
+
+	cv::normalize(smoothed_image,normalized_image,1.0,255.0,cv::NORM_MINMAX);
+	DUMP_IMAGE(normalized_image,"/home/sarath/texture_normalised_out.png");
 	cv::subtract(255.0,normalized_image,dst);
-#if USE_MORPHOLOGICAL_OPS
+#if (USE_MORPHOLOGICAL_OPS)
     int erosion_size = 4;
 	int dilation_size = 4;
 
@@ -399,14 +410,30 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 									   std::vector<cv::Mat>&image_planes)
 {
 
-	cv::Mat input = in_lab,response,L_median;
+	cv::Mat input = in_lab,response,L_median,L_inter;
 	cv::Mat L_channel = image_planes[0];
 	cv::Mat a_channel = image_planes[1];
 	cv::Mat b_channel = image_planes[2];
 
-	cv::medianBlur(L_channel,L_median,61);
+	std::cout << L_channel.type() << std::endl;
+
+	cv::medianBlur(L_channel,L_median,11);
 	DUMP_IMAGE(L_median,"/home/sarath/L_median.png");
 	L_channel = L_median;
+	L_channel.convertTo(L_inter,CV_32FC1);
+
+    cv::Mat blurred_heatmap;//
+    cv::Mat dst;// = cv::Mat::zeros(heat_map.rows,heat_map.rows,CV_8U);
+    cv::Mat heat_map_copy;
+
+    cv::GaussianBlur(L_inter,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
+    //cv::boxFilter(heat_map,blurred_heatmap,5,cv::Size(159,159));
+    cv::add(1,blurred_heatmap,dst);
+    DUMP_IMAGE(dst,"/home/sarath/heat_map_blur.png");
+
+    cv::divide(L_inter,dst,L_inter);
+    cv::multiply(128,L_inter,L_inter);
+    DUMP_IMAGE(L_inter,"/home/sarath/heat_map_division.png");
 
 	response = cv::Mat::zeros(L_channel.rows,L_channel.cols,CV_32FC1);
 
@@ -515,17 +542,19 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 #endif
 
     DUMP_IMAGE(heat_map,"/home/sarath/heat_map.png");
-
+#if 0
     cv::Mat blurred_heatmap;//
     cv::Mat dst;// = cv::Mat::zeros(heat_map.rows,heat_map.rows,CV_8U);
     cv::Mat heat_map_copy;
 
-    cv::GaussianBlur(heat_map,blurred_heatmap,cv::Size(159,159),10,0,cv::BORDER_DEFAULT);
+    cv::GaussianBlur(heat_map,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
+    //cv::boxFilter(heat_map,blurred_heatmap,5,cv::Size(159,159));
     cv::add(1,blurred_heatmap,dst);
     DUMP_IMAGE(dst,"/home/sarath/heat_map_blur.png");
     cv::divide(heat_map,dst,heat_map);
-    cv::multiply(255,heat_map,heat_map);
+    cv::multiply(128,heat_map,heat_map);
     DUMP_IMAGE(heat_map,"/home/sarath/heat_map_division.png");
+#endif
 
     if(texture_image.data)
     {
@@ -534,7 +563,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     DUMP_IMAGE(heat_map,"/home/sarath/heat_map_mul.png");
 
 #if(USE_GLOBAL_THRESHOLD)
-    cv::threshold(heat_map,heat_map,90,255,CV_THRESH_BINARY);
+    cv::threshold(heat_map,heat_map,140,255,CV_THRESH_BINARY);
     heat_map.convertTo(heat_map, CV_8UC1);
 #elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
@@ -757,11 +786,10 @@ void Compute_Luminance(cv::Mat &in, cv::Mat &out)
 
 void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
-#ifdef ENABLE_TIME_CHECK
+#ifdef ENABLE_TIMING
 	// Get clock
 	clock_t start_s=clock();
 #endif
-
 	cv::Mat lab_image,src_gray,texture_out;
 	if(! imgPtr->data) {
 		std::cout << "ERROR: could not read image"<< std::endl;
@@ -783,7 +811,6 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 
 	// Convert the color space to Lab
 	cv::cvtColor(Input_image,lab_image,CV_RGB2Lab);
-	//cv::cvtColor(Input_image,Input_image,CV_RGB2BGR);
 	DUMP_IMAGE(Input_image,"/home/sarath/input.png");
 
 
@@ -821,12 +848,8 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		  process_image(camera_index,lab_image, out_image,index,detected_samples,texture_out,image_planes);
 		}
 	}
-
-#ifdef ENABLE_TIME_CHECK
+#ifdef ENABLE_TIMING
 	clock_t stop_s=clock();  // end
-	std::cout << "-------------------------" << std::endl;
-	std::cout<<"Total time: "<<(stop_s - start_s)<<std::endl;
-	std::cout << "-------------------------" << std::endl;
+	Display_time((stop_s - start_s)/CLOCKS_PER_MS);
 #endif
-
 }
