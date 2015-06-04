@@ -289,31 +289,48 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 
 void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 {
+#if (CUDA_GPU)
+	cv::gpu::GpuMat gpu_in, gpu_out;
+#endif
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
 	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
 	int scale = 1;
 	int delta = 0;
 	int ddepth = -1;
+	int kern = 7;
 
 	/// Gradient X
-	cv::Sobel( src, grad_x, ddepth, 1, 0, 7, scale, delta, cv::BORDER_DEFAULT );
+#if (CUDA_GPU)
+	gpu_in.upload(src);
+	cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 1, 0, kern, scale, cv::BORDER_DEFAULT);
+	gpu_out.download(grad_x);
+#else
+	cv::Sobel( src, grad_x, ddepth, 1, 0, kern, scale, delta, cv::BORDER_DEFAULT );
+#endif
 	cv::convertScaleAbs( grad_x, abs_grad_x );
 
 	/// Gradient Y
-	cv::Sobel( src, grad_y, ddepth, 0, 1, 7, scale, delta, cv::BORDER_DEFAULT );
+#if (CUDA_GPU)
+	gpu_in.upload(src);
+        cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 0, 1, kern, scale, cv::BORDER_DEFAULT);
+        gpu_out.download(grad_y);
+#else
+	cv::Sobel( src, grad_y, ddepth, 0, 1, kern, scale, delta, cv::BORDER_DEFAULT );
+#endif
 	cv::convertScaleAbs( grad_y, abs_grad_y );
 
 	/// Total Gradient (approximate)
 	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst );
-	DUMP_IMAGE(dst,"/home/sarath/texture_derivative_out.png");
+	DUMP_IMAGE(dst,"/tmp/texture_derivative_out.png");
 
 	cv::medianBlur(dst,smoothed_image,39);
-	DUMP_IMAGE(smoothed_image,"/home/sarath/texture_median_out.png");
+	DUMP_IMAGE(smoothed_image,"/tmp/texture_median_out.png");
 
 	cv::normalize(smoothed_image,normalized_image,1.0,255.0,cv::NORM_MINMAX);
-	DUMP_IMAGE(normalized_image,"/home/sarath/texture_normalised_out.png");
+	DUMP_IMAGE(normalized_image,"/tmp/texture_normalised_out.png");
 	cv::subtract(255.0,normalized_image,dst);
+
 #if (USE_MORPHOLOGICAL_OPS)
     int erosion_size = 4;
 	int dilation_size = 4;
@@ -322,16 +339,28 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::Mat erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
 										 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
 										 cv::Point( erosion_size, erosion_size ) );
+#if (CUDA_GPU)
+	gpu_in.upload(dst);
+	cv::gpu::erode(gpu_in, gpu_out, erosion_element);
+	gpu_out.download(erosion_dst);
+#else	
 	cv::erode(dst,erosion_dst,erosion_element);
+#endif
 
-	DUMP_IMAGE(erosion_dst,"/home/sarath/texture_erosion_out.png");
+	DUMP_IMAGE(erosion_dst,"/tmp/texture_erosion_out.png");
 	cv::Mat dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
 											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
 											 cv::Point( dilation_size, dilation_size ) );
-
+#if (CUDA_GPU)
+	gpu_in.upload(erosion_dst);
+	cv::gpu::dilate(gpu_in, gpu_out, dilation_element);
+	gpu_out.download(dst);
+#else
 	cv::dilate(erosion_dst,dst,dilation_element);
-	DUMP_IMAGE(dst,"/home/sarath/texture_dilation_out.png");
 #endif
+
+	DUMP_IMAGE(dst,"/tmp/texture_dilation_out.png");
+#endif //USE_MORPHOLOGICAL_OPS
 }
 
 
@@ -418,22 +447,54 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	std::cout << L_channel.type() << std::endl;
 
 	cv::medianBlur(L_channel,L_median,11);
-	DUMP_IMAGE(L_median,"/home/sarath/L_median.png");
+	DUMP_IMAGE(L_median,"/tmp/L_median.png");
 	L_channel = L_median;
 	L_channel.convertTo(L_inter,CV_32FC1);
+
+#if (CUDA_GPU)
+    cv::gpu::GpuMat gpu_in, gpu_out;
+#endif
 
     cv::Mat blurred_heatmap;//
     cv::Mat dst;// = cv::Mat::zeros(heat_map.rows,heat_map.rows,CV_8U);
     cv::Mat heat_map_copy;
 
+#if (CUDA_GPU)
+    gpu_in.upload(L_inter);
+    cv::gpu::GaussianBlur(gpu_in, gpu_out, cv::Size(159,159),10,0,cv::BORDER_DEFAULT);
+    gpu_out.download(blurred_heatmap);
+#else
     cv::GaussianBlur(L_inter,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
     //cv::boxFilter(heat_map,blurred_heatmap,5,cv::Size(159,159));
-    cv::add(1,blurred_heatmap,dst);
-    DUMP_IMAGE(dst,"/home/sarath/heat_map_blur.png");
+#endif
 
+
+#if (CUDA_GPU)
+    gpu_in.upload(blurred_heatmap);
+    cv::gpu::add(1, gpu_in, gpu_out);
+    gpu_out.download(dst);
+#else
+    cv::add(1,blurred_heatmap,dst);
+#endif
+    DUMP_IMAGE(dst,"/tmp/heat_map_blur.png");
+
+
+#if (CUDA_GPU)
+    gpu_in.upload(L_inter);
+    cv::gpu::divide(gpu_in, gpu_out, gpu_in);
+    gpu_in.download(L_inter);
+#else
     cv::divide(L_inter,dst,L_inter);
+#endif
+
+#if (CUDA_GPU)
+    gpu_in.upload(L_inter);
+    cv::gpu::multiply(128, gpu_in, gpu_out);
+    gpu_out.download(L_inter);
+#else
     cv::multiply(128,L_inter,L_inter);
-    DUMP_IMAGE(L_inter,"/home/sarath/heat_map_division.png");
+#endif
+    DUMP_IMAGE(L_inter,"/tmp/heat_map_division.png");
 
 	response = cv::Mat::zeros(L_channel.rows,L_channel.cols,CV_32FC1);
 
@@ -526,6 +587,9 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 	// sample index is same for all samples this call
 	sample.id = index;
 
+#if (CUDA_GPU)
+    cv::gpu::GpuMat gpu_in, gpu_out;
+#endif
     cv::Mat heat_map, sobel_out, erosion_dst, dilation_dst;
 
     std::vector<std::vector<cv::Point> > contours;
@@ -541,26 +605,39 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         							registered_sample[index].channel3,heat_map,image_planes);
 #endif
 
-    DUMP_IMAGE(heat_map,"/home/sarath/heat_map.png");
+    DUMP_IMAGE(heat_map,"/tmp/heat_map.png");
 #if 0
     cv::Mat blurred_heatmap;//
     cv::Mat dst;// = cv::Mat::zeros(heat_map.rows,heat_map.rows,CV_8U);
     cv::Mat heat_map_copy;
 
-    cv::GaussianBlur(heat_map,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
+#if (CUDA_GPU)
+    gpu_in.upload(heat_map);
+    cv::gpu::GaussianBlur(gpu_in, gpu_out, cv::Size(159,159),10,0,cv::BORDER_DEFAULT);
+    gpu_out.download(blurred_heatmap);
+#else
+    cv::GaussianBlur(heat_map,blurred_heatmap,cv::Size(159,159),10,0,cv::BORDER_DEFAULT);
     //cv::boxFilter(heat_map,blurred_heatmap,5,cv::Size(159,159));
+#endif
     cv::add(1,blurred_heatmap,dst);
-    DUMP_IMAGE(dst,"/home/sarath/heat_map_blur.png");
+    DUMP_IMAGE(dst,"/tmp/heat_map_blur.png");
     cv::divide(heat_map,dst,heat_map);
     cv::multiply(128,heat_map,heat_map);
-    DUMP_IMAGE(heat_map,"/home/sarath/heat_map_division.png");
+    DUMP_IMAGE(heat_map,"/tmp/heat_map_division.png");
 #endif
 
     if(texture_image.data)
     {
+#if (CUDA_GPU)
+	gpu_in.upload(texture_image);
+	gpu_out.upload(heat_map);
+	cv::gpu::multiply(gpu_in, gpu_out, gpu_in, 1/255.0,CV_32FC1);
+	gpu_in.download(heat_map);
+#else
     	cv::multiply(texture_image,heat_map,heat_map,1/255.0,CV_32FC1);
+#endif
     }
-    DUMP_IMAGE(heat_map,"/home/sarath/heat_map_mul.png");
+    DUMP_IMAGE(heat_map,"/tmp/heat_map_mul.png");
 
 #if(USE_GLOBAL_THRESHOLD)
     cv::threshold(heat_map,heat_map,140,255,CV_THRESH_BINARY);
@@ -569,7 +646,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     heat_map.convertTo(heat_map, CV_8UC1);
     cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,151,-35);
 #endif
-    DUMP_IMAGE(heat_map,"/home/sarath/thresh_heat_map.png");
+    DUMP_IMAGE(heat_map,"/tmp/thresh_heat_map.png");
 
 
 #if USE_MORPHOLOGICAL_OPS
@@ -580,16 +657,30 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 	cv::Mat erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
 										 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
 										 cv::Point( erosion_size, erosion_size ) );
+#if (CUDA_GPU)
+	gpu_in.upload(heat_map);
+	cv::gpu::erode(gpu_in, gpu_out, erosion_element);
+	gpu_out.download(erosion_dst);
+#else
 	cv::erode(heat_map,erosion_dst,erosion_element);
+#endif
 
-	DUMP_IMAGE(erosion_dst,"/home/sarath/erosion_out.png");
+	DUMP_IMAGE(erosion_dst,"/tmp/erosion_out.png");
 	cv::Mat dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
 											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
 											 cv::Point( dilation_size, dilation_size ) );
 
+#if (CUDA_GPU)
+	gpu_in.upload(erosion_dst);
+	cv::gpu::dilate(gpu_in, gpu_out, dilation_element);
+	gpu_out.download(heat_map);
+#else
 	cv::dilate(erosion_dst,heat_map,dilation_element);
-	DUMP_IMAGE(heat_map,"/home/sarath/dilation_out.png");
 #endif
+	DUMP_IMAGE(heat_map,"/tmp/dilation_out.png");
+
+#endif //USE_MORPHOLOGICAL_OPS
+
     // Find contours in the thresholded image to determine shapes
     cv::findContours(heat_map,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,cv::Point(0,0));
 
@@ -811,13 +902,13 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 
 	// Convert the color space to Lab
 	cv::cvtColor(Input_image,lab_image,CV_RGB2Lab);
-	DUMP_IMAGE(Input_image,"/home/sarath/input.png");
+	DUMP_IMAGE(Input_image,"/tmp/input.png");
 
 
 #ifdef ENABLE_TEXTURE_TEST
 	cv::cvtColor(Input_image,src_gray,CV_RGB2GRAY);
 	GetTextureImage(src_gray,texture_out);
-	DUMP_IMAGE(texture_out,"/home/sarath/texture_out.png");
+	DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
 #endif
 	// Clear detected_samples structure before filling in with new data
 	detected_samples.clear();
@@ -836,9 +927,9 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	channel2 = image_planes[1];
 	channel3 = image_planes[2];
 
-	DUMP_IMAGE(channel1,"/home/sarath/channel1.png");
-	DUMP_IMAGE(channel2,"/home/sarath/channel2.png");
-	DUMP_IMAGE(channel3,"/home/sarath/channel3.png");
+	DUMP_IMAGE(channel1,"/tmp/channel1.png");
+	DUMP_IMAGE(channel2,"/tmp/channel2.png");
+	DUMP_IMAGE(channel3,"/tmp/channel3.png");
 
 	// Get the iterator for the vector color space and loop through all sample color's
 	for(int index = 0; index < registered_sample.size(); ++index)
