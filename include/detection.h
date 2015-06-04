@@ -8,6 +8,8 @@
 #include <iostream>
 #include <vector>
 
+#define MAX_CAMERAS_SUPPORTED (1)
+
 typedef enum
 {
 	OFF,

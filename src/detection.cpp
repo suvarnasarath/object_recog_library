@@ -1,15 +1,20 @@
 #include <math.h>
 #include "detection.h"
+#include <time.h>
 
 #define DEBUG_DUMP
-#define USE_GLOBAL_THRESHOLD   (1)
+#define USE_GLOBAL_THRESHOLD   (0)
 #define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
 #define USE_LAB_SPACE		   (!USE_HSV_SPACE)
-
+#define USE_MORPHOLOGICAL_OPS  (1)
 #define ENABLE_DEPTH_TEST	   (0)
 #define ENABLE_SHAPE_TEST	   (0)
 #define ENABLE_TEXTURE_TEST    (1)
+
+// Number of row pixels to remove from the bottom of the image to create ROI.
+// At the current pitch, tray is in the way causing reflections and thus false detections.
+#define ROWS_TO_ELIMINATE (65)
 
 #ifdef DEBUG_DUMP
 #define DUMP_IMAGE(IMG,FILE) cv::imwrite(FILE,IMG);
@@ -25,7 +30,6 @@
 #define THRESHOLD (0.5)
 
 // Globals
-cv::RNG rng(12345);  //Used to generate random color for drawing
 int kernel_size = 2;
 
 // Set debug messages OFF by default
@@ -280,7 +284,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 {
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
-	cv::Mat abs_grad_x, abs_grad_y;
+	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
 	int scale = 1;
 	int delta = 0;
 	int ddepth = -1;
@@ -296,30 +300,39 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	/// Total Gradient (approximate)
 	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst );
 
-	cv::medianBlur(dst,smoothed_image,9);
+	cv::medianBlur(dst,smoothed_image,79);
 	cv::normalize(smoothed_image,normalized_image,128.0,255.0,cv::NORM_MINMAX);
 	cv::subtract(255.0,normalized_image,dst);
+#if USE_MORPHOLOGICAL_OPS
+    int erosion_size = 4;
+	int dilation_size = 4;
+
+	// erode and dilate
+	cv::Mat erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
+										 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
+										 cv::Point( erosion_size, erosion_size ) );
+	cv::erode(dst,erosion_dst,erosion_element);
+
+	DUMP_IMAGE(erosion_dst,"/home/sarath/texture_erosion_out.png");
+	cv::Mat dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
+											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
+											 cv::Point( dilation_size, dilation_size ) );
+
+	cv::dilate(erosion_dst,dst,dilation_element);
+	DUMP_IMAGE(dst,"/home/sarath/texture_dilation_out.png");
+#endif
 }
 
 
 void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
 									   const channel_info & sat,
-									   const channel_info & val,cv::Mat &out)
+									   const channel_info & val,cv::Mat &out,
+									   std::vector<cv::Mat>&image_planes)
 {
-	cv::Mat input = in_hsv;
-	cv::Mat response;
-	// Vector of Mat elements to store H,S,V planes
-	std::vector<cv::Mat> hsv_planes(3);
-
-	cv::split( input, hsv_planes );
-
-	cv::Mat H = hsv_planes[0];
-	cv::Mat S = hsv_planes[1];
-	cv::Mat V = hsv_planes[2];
-
-	DUMP_IMAGE(H,"/home/sarath/H.png");
-	DUMP_IMAGE(S,"/home/sarath/S.png");
-	DUMP_IMAGE(V,"/home/sarath/V.png");
+	cv::Mat input = in_hsv,response;
+	cv::Mat H = image_planes[0];
+	cv::Mat S = image_planes[1];
+	cv::Mat V = image_planes[2];
 
 	response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
 
@@ -382,29 +395,18 @@ void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
 
 void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 									   const channel_info & a_info,
-									   const channel_info & b_info,cv::Mat &out)
+									   const channel_info & b_info,cv::Mat &out,
+									   std::vector<cv::Mat>&image_planes)
 {
 
-	cv::Mat input = in_lab;
-	cv::Mat response,L_median;
-	// Vector of Mat elements to store H,S,V planes
-	std::vector<cv::Mat> lab_planes(3);
+	cv::Mat input = in_lab,response,L_median;
+	cv::Mat L_channel = image_planes[0];
+	cv::Mat a_channel = image_planes[1];
+	cv::Mat b_channel = image_planes[2];
 
-	cv::split( input, lab_planes );
-
-	cv::Mat L_channel = lab_planes[0];
-	cv::Mat a_channel = lab_planes[1];
-	cv::Mat b_channel = lab_planes[2];
-
-	DUMP_IMAGE(L_channel,"/home/sarath/L.png");
-	DUMP_IMAGE(a_channel,"/home/sarath/a.png");
-	DUMP_IMAGE(b_channel,"/home/sarath/b.png");
-
-	//GetTextureImage(a_channel);
-	//GetTextureImage(L_channel);
-
-	//cv::medianBlur(L_channel,L_channel,7);
-	//DUMP_IMAGE(L_channel,"/home/sarath/L_median.png");
+	cv::medianBlur(L_channel,L_median,61);
+	DUMP_IMAGE(L_median,"/home/sarath/L_median.png");
+	L_channel = L_median;
 
 	response = cv::Mat::zeros(L_channel.rows,L_channel.cols,CV_32FC1);
 
@@ -433,9 +435,9 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 			int32_t a = static_cast<int32_t>(a_channel.at<uint8_t>(rows,cols));
 			int32_t b = static_cast<int32_t>(b_channel.at<uint8_t>(rows,cols));
 
+			int32_t L_deviation = L - L_ref;
 			int32_t a_deviation = a - a_ref;
 			int32_t b_deviation = b - b_ref;
-			int32_t L_deviation = L - L_ref;
 
 			a_deviation = std::max(-max_a_dev,std::min(max_a_dev,a_deviation));
 			a_deviation = max_a_dev - std::abs(a_deviation);
@@ -482,7 +484,8 @@ bool compare_HuMoments(const std::vector<double> &GroundtruthHuMoments, const do
 }
 
 bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image,
-				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,cv::Mat texture_image)
+				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,cv::Mat texture_image,
+				   std::vector<cv::Mat> &image_planes)
 {    
 	bool draw_sample = false;
 	DETECTED_SAMPLE sample;
@@ -500,18 +503,29 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
-    double HuMoments[7],contour_area;
+    double contour_area;
 
 #if(USE_HSV_SPACE)
     generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
-    							registered_sample[index].channel3,heat_map);
+    							registered_sample[index].channel3,heat_map,image_planes);
 #elif(USE_LAB_SPACE)
 
     generate_heat_map_LAB(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
-        							registered_sample[index].channel3,heat_map);
+        							registered_sample[index].channel3,heat_map,image_planes);
 #endif
 
     DUMP_IMAGE(heat_map,"/home/sarath/heat_map.png");
+
+    cv::Mat blurred_heatmap;//
+    cv::Mat dst;// = cv::Mat::zeros(heat_map.rows,heat_map.rows,CV_8U);
+    cv::Mat heat_map_copy;
+
+    cv::GaussianBlur(heat_map,blurred_heatmap,cv::Size(159,159),10,0,cv::BORDER_DEFAULT);
+    cv::add(1,blurred_heatmap,dst);
+    DUMP_IMAGE(dst,"/home/sarath/heat_map_blur.png");
+    cv::divide(heat_map,dst,heat_map);
+    cv::multiply(255,heat_map,heat_map);
+    DUMP_IMAGE(heat_map,"/home/sarath/heat_map_division.png");
 
     if(texture_image.data)
     {
@@ -524,27 +538,29 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     heat_map.convertTo(heat_map, CV_8UC1);
 #elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
-    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,31,-200);
+    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,151,-35);
 #endif
     DUMP_IMAGE(heat_map,"/home/sarath/thresh_heat_map.png");
 
-/*
-    int erosion_size = 12;
-	int dilation_size = 12;
+
+#if USE_MORPHOLOGICAL_OPS
+    int erosion_size = 4;
+	int dilation_size = 4;
 
 	// erode and dilate
 	cv::Mat erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
 										 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
 										 cv::Point( erosion_size, erosion_size ) );
 	cv::erode(heat_map,erosion_dst,erosion_element);
-	DUMP_IMAGE(heat_map,"/home/sarath/erosion_out.png");
+
+	DUMP_IMAGE(erosion_dst,"/home/sarath/erosion_out.png");
 	cv::Mat dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
 											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
 											 cv::Point( dilation_size, dilation_size ) );
 
 	cv::dilate(erosion_dst,heat_map,dilation_element);
 	DUMP_IMAGE(heat_map,"/home/sarath/dilation_out.png");
-*/
+#endif
     // Find contours in the thresholded image to determine shapes
     cv::findContours(heat_map,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,cv::Point(0,0));
 
@@ -558,20 +574,21 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
      {
     	const std::vector<cv::Point> & countour = contours_poly[i];
 
-        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 2.0, true );
+        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 10.0, false );
         boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
 
         contour_area = cv::contourArea(contours[i]);
 
    	    if(contour_area < camera_parameters[camera_index].min_bb_area_in_pixels)
 		{
-   	    	if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
+   	    	//if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
 			continue;
 		} else {
 			if(bPrintDebugMsg > DEBUG)std::cout << "passed area test: " << contour_area << std::endl;
 		}
 
 #if ENABLE_SHAPE_TEST
+   	    double HuMoments[7];
    	    // Compute Moments
         cv::HuMoments(cv::moments(contours[i]),HuMoments);
 
@@ -683,8 +700,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
           double height = camera_parameters[camera_index].height * camera_parameters[camera_index].height;
           double dist = std::max(std::sqrt(sample.x*sample.x +  sample.y*sample.y + height),1.0);
           double expected_area = registered_sample[index].pixel_dist_factor/dist;
-          //contour_area = contour_area*10;
-          if(contour_area > expected_area)
+
+          if(1/*contour_area > expected_area*/)
           {
         	  if(bPrintDebugMsg > DEBUG)
         		  std::cout << "accepted sample area: " << contour_area << " "
@@ -693,9 +710,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 				detected_samples.push_back(sample);
 
 				if (out_image != NULL) {
-					cv::Scalar color = cv::Scalar(rng.uniform(0, 255),rng.uniform(0, 255), rng.uniform(0, 255));
-					cv::drawContours(drawing, contours_poly, i, color, 2, 8,hierarchy, 0, cv::Point());
-
+					//cv::drawContours(Input_image, contours_poly, i, (0, 0, 255), 2, 8,hierarchy, 0, cv::Point());
 					// Draw a bounding box
 					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
 				} else {
@@ -713,15 +728,40 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 				std::cout << "detected very small sample" << std::endl;
 		}
 	}
-
     // Print the number of samples found
-    if(bPrintDebugMsg > DEBUG)
-    	std::cout << "Number of samples found: "<< detected_samples.size() << std::endl;
+	if(bPrintDebugMsg > DEBUG)
+		std::cout << "Number of samples found: "<< detected_samples.size() << std::endl;
     return true;
 }
 
+#if 0
+void Compute_Luminance(cv::Mat &in, cv::Mat &out)
+{
+	double Luminance;
+	std::vector<cv::Mat> image_planes(3);
+	// Split the image in to 3 planes
+	cv::split( in, image_planes );
+	cv::Mat R = image_planes[0];
+	cv::Mat G = image_planes[1];
+	cv::Mat B = image_planes[2];
+
+	for(int i=0;i<in.rows;++i)
+	{
+		for(int j=0;j<in.cols;++j)
+		{
+			out.at<int>(rows,cols) = 0.299*R.at<int>(rows,cols) + 0.587*G.at<int>(rows,cols) + 0.114*B.at<int>(rows,cols);
+		}
+	}
+}
+#endif
+
 void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
+#ifdef ENABLE_TIME_CHECK
+	// Get clock
+	clock_t start_s=clock();
+#endif
+
 	cv::Mat lab_image,src_gray,texture_out;
 	if(! imgPtr->data) {
 		std::cout << "ERROR: could not read image"<< std::endl;
@@ -730,24 +770,63 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 
 	Input_image = *imgPtr;
 
-	// Convert the color space to HSV
+	// Add ROI to the image
+	if(camera_index >= 0 && camera_index < MAX_CAMERAS_SUPPORTED)
+	{
+		Input_image = Input_image(cv::Rect( 0,0,
+											camera_parameters[camera_index].Hpixels,
+											camera_parameters[camera_index].Vpixels-ROWS_TO_ELIMINATE));
+	} else {
+		std::cout << "ERROR: Unknown number of camera's registered "<< std::endl;
+		return;
+	}
+
+	// Convert the color space to Lab
 	cv::cvtColor(Input_image,lab_image,CV_RGB2Lab);
+	//cv::cvtColor(Input_image,Input_image,CV_RGB2BGR);
 	DUMP_IMAGE(Input_image,"/home/sarath/input.png");
+
 
 #ifdef ENABLE_TEXTURE_TEST
 	cv::cvtColor(Input_image,src_gray,CV_RGB2GRAY);
 	GetTextureImage(src_gray,texture_out);
 	DUMP_IMAGE(texture_out,"/home/sarath/texture_out.png");
 #endif
-	// Clear detected_samples structure before filling in with new image data
+	// Clear detected_samples structure before filling in with new data
 	detected_samples.clear();
+
+	cv::Mat channel1 = cv::Mat::zeros(Input_image.rows,Input_image.rows,1);
+	cv::Mat channel2 = cv::Mat::zeros(Input_image.rows,Input_image.rows,1);
+	cv::Mat channel3 = cv::Mat::zeros(Input_image.rows,Input_image.rows,1);
+
+	// Vector of Mat elements to store individual image planes
+	std::vector<cv::Mat> image_planes(3);
+
+	// Split the image in to 3 planes
+	cv::split( lab_image, image_planes );
+
+	channel1 = image_planes[0];
+	channel2 = image_planes[1];
+	channel3 = image_planes[2];
+
+	DUMP_IMAGE(channel1,"/home/sarath/channel1.png");
+	DUMP_IMAGE(channel2,"/home/sarath/channel2.png");
+	DUMP_IMAGE(channel3,"/home/sarath/channel3.png");
 
 	// Get the iterator for the vector color space and loop through all sample color's
 	for(int index = 0; index < registered_sample.size(); ++index)
 	{
 		if(registered_sample[index].isValid)
 		{
-		  process_image(camera_index,lab_image, out_image,index,detected_samples,texture_out);
+		  process_image(camera_index,lab_image, out_image,index,detected_samples,texture_out,image_planes);
 		}
 	}
+
+#ifdef ENABLE_TIME_CHECK
+	clock_t stop_s=clock();  // end
+	std::cout << "-------------------------" << std::endl;
+	std::cout<<"Total time: "<<(stop_s - start_s)<<std::endl;
+	std::cout << "-------------------------" << std::endl;
+#endif
+
 }

@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	/*******************************/
 	platform_camera_parameters param;
 	param.height = 0.76385;   // height of the camera from ground plane
-	param.pitch = 0.366;      // Pitch angle of the camera (up from down)
+	param.pitch = 0.593411945678072;//0.366;      // Pitch angle of the camera (up from down)
 	param.HFov = 1.3962634;   // Horizontal field of view
 	param.VFov = 0.7853981625;// Vertical field of view
 	param.Hpixels = 1920;
@@ -88,12 +88,12 @@ int main(int argc, char **argv)
 	/*
 	 * White
 	 */
-	std::vector<double>L{190,60,0.6};
+	std::vector<double>L{100,30,0.6};
 	std::vector<double>a{128,20,0.1};
-	std::vector<double>b{128,40,0.3};
-	std::vector<double>width{0.03,2.0};
+	std::vector<double>b{128,30,0.3};
+	std::vector<double>width{0.03,0.3};
 	std::vector<double>depth{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_white = 8000;
+	double pixel_dist_factor_white = 1;
 	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
 
 #else
