@@ -514,7 +514,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,cv::Mat texture_image,
 				   std::vector<cv::Mat> &image_planes)
 {    
-	bool draw_sample = false;
 	DETECTED_SAMPLE sample;
 
 	if(bPrintDebugMsg > DEBUG)
@@ -526,7 +525,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 	// sample index is same for all samples this call
 	sample.id = index;
 
-    cv::Mat heat_map, sobel_out, erosion_dst, dilation_dst;
+    cv::Mat heat_map, erosion_dst, dilation_dst;
 
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
@@ -563,7 +562,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     DUMP_IMAGE(heat_map,"/home/sarath/heat_map_mul.png");
 
 #if(USE_GLOBAL_THRESHOLD)
-    cv::threshold(heat_map,heat_map,140,255,CV_THRESH_BINARY);
+    cv::threshold(heat_map,heat_map,100,255,CV_THRESH_BINARY);
     heat_map.convertTo(heat_map, CV_8UC1);
 #elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
@@ -592,6 +591,9 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 #endif
     // Find contours in the thresholded image to determine shapes
     cv::findContours(heat_map,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE,cv::Point(0,0));
+
+    if(bPrintDebugMsg > DEBUG)
+    	std::cout << "Number of contours found: " << contours.size() <<std::endl;
 
     // Draw all the contours found in the previous step
     cv::Mat drawing = cv::Mat::zeros( heat_map.size(), CV_8UC3 );
