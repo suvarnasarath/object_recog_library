@@ -2,7 +2,7 @@
 #include "detection.h"
 #include <time.h>
 
-//#define DEBUG_DUMP
+#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD   (1)
 #define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
@@ -15,7 +15,8 @@
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
 // At the current pitch, tray is in the way causing reflections and thus false detections.
-#define ROWS_TO_ELIMINATE (65)
+#define ROWS_TO_ELIMINATE_AT_BOTTOM (65)
+#define ROWS_TO_ELIMINATE_AT_TOP    (ROWS_TO_ELIMINATE_AT_BOTTOM)
 
 #ifdef DEBUG_DUMP
 #define DUMP_IMAGE(IMG,FILE) cv::imwrite(FILE,IMG);
@@ -43,7 +44,9 @@ void Display_time(clock_t time_elapsed)
 // Set debug messages OFF by default
 LOGLEVEL bPrintDebugMsg = OFF;
 
-cv::Mat Input_image;
+cv::Mat Input_image, erosion_element, dilation_element;
+bool bInit = false;
+
 /*
  * pixel coordinates
  */
@@ -98,6 +101,25 @@ typedef struct
 std::vector<REGISTERED_SAMPLE> registered_sample;
 std::vector<DETECTED_SAMPLE> detected_samples;
 std::vector<platform_camera_parameters>camera_parameters;
+
+bool Initialize_lib()
+{
+	if(!bInit)
+	{
+		// Compute the structuring elements for erosion and dilation before hand
+		int erosion_size = 4;
+		int dilation_size = 4;
+		// erode and dilate
+		erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
+											 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
+											 cv::Point( erosion_size, erosion_size ) );
+
+		dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
+											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
+											 cv::Point( dilation_size, dilation_size ) );
+	}
+	return true;
+}
 
 /*
  * When enabled, prints debugging messages
@@ -259,6 +281,12 @@ void register_camera(unsigned int camera_id, const platform_camera_parameters *p
 		camera_parameters.push_back(*param);
 		precompute_world_lookup(camera_id);
 	}
+
+	if(!bInit)
+	{
+		Initialize_lib();
+		bInit = true;
+	}
 }
 
 int get_registered_sample_size()
@@ -353,35 +381,23 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 #endif
 
 #if (USE_MORPHOLOGICAL_OPS)
-    int erosion_size = 4;
-	int dilation_size = 4;
-
-	// erode and dilate
-	cv::Mat erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
-										 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
-										 cv::Point( erosion_size, erosion_size ) );
 #if (CUDA_GPU)
+
 	gpu_in.upload(dst);
 	cv::gpu::erode(gpu_in, gpu_out, erosion_element);
 	gpu_out.download(erosion_dst);
-#else	
-	cv::erode(dst,erosion_dst,erosion_element);
-#endif
-
-	DUMP_IMAGE(erosion_dst,"/tmp/texture_erosion_out.png");
-	cv::Mat dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
-											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
-											 cv::Point( dilation_size, dilation_size ) );
-#if (CUDA_GPU)
 	gpu_in.upload(erosion_dst);
 	cv::gpu::dilate(gpu_in, gpu_out, dilation_element);
 	gpu_out.download(dst);
 #else
+	cv::erode(dst,erosion_dst,erosion_element);
 	cv::dilate(erosion_dst,dst,dilation_element);
-#endif
+
+#endif // CUDA
+#endif //USE_MORPHOLOGICAL_OPS
 
 	DUMP_IMAGE(dst,"/tmp/texture_dilation_out.png");
-#endif //USE_MORPHOLOGICAL_OPS
+	DUMP_IMAGE(erosion_dst,"/tmp/texture_erosion_out.png");
 }
 
 
@@ -474,9 +490,8 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
     cv::gpu::GpuMat gpu_in, gpu_out;
 #endif
 
-    cv::Mat blurred_heatmap;//
-    cv::Mat dst;// = cv::Mat::zeros(heat_map.rows,heat_map.rows,CV_8U);
-    cv::Mat heat_map_copy;
+    cv::Mat blurred_heatmap = cv::Mat::zeros(L_inter.rows,L_inter.cols,CV_32FC1);
+    cv::Mat dst, heat_map_copy;
 
 #if (CUDA_GPU)
     gpu_in.upload(L_inter);
@@ -484,7 +499,8 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
     gpu_out.download(blurred_heatmap);
 #else
     cv::GaussianBlur(L_inter,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
-    //cv::boxFilter(heat_map,blurred_heatmap,5,cv::Size(159,159));
+    //cv::boxFilter(L_inter,blurred_heatmap,5,cv::Size(159,159));
+
 #endif
 
 
@@ -624,25 +640,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 #endif
 
     DUMP_IMAGE(heat_map,"/tmp/heat_map.png");
-#if 0
-    cv::Mat blurred_heatmap;//
-    cv::Mat dst;// = cv::Mat::zeros(heat_map.rows,heat_map.rows,CV_8U);
-    cv::Mat heat_map_copy;
-
-#if (CUDA_GPU)
-    gpu_in.upload(heat_map);
-    cv::gpu::GaussianBlur(gpu_in, gpu_out, cv::Size(159,159),10,0,cv::BORDER_DEFAULT);
-    gpu_out.download(blurred_heatmap);
-#else
-    cv::GaussianBlur(heat_map,blurred_heatmap,cv::Size(159,159),10,0,cv::BORDER_DEFAULT);
-    //cv::boxFilter(heat_map,blurred_heatmap,5,cv::Size(159,159));
-#endif
-    cv::add(1,blurred_heatmap,dst);
-    DUMP_IMAGE(dst,"/tmp/heat_map_blur.png");
-    cv::divide(heat_map,dst,heat_map);
-    cv::multiply(128,heat_map,heat_map);
-    DUMP_IMAGE(heat_map,"/tmp/heat_map_division.png");
-#endif
 
     if(texture_image.data)
     {
@@ -668,33 +665,20 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
 
 #if USE_MORPHOLOGICAL_OPS
-    int erosion_size = 4;
-	int dilation_size = 4;
 
-	// erode and dilate
-	cv::Mat erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
-										 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
-										 cv::Point( erosion_size, erosion_size ) );
 #if (CUDA_GPU)
 	gpu_in.upload(heat_map);
 	cv::gpu::erode(gpu_in, gpu_out, erosion_element);
 	gpu_out.download(erosion_dst);
-#else
-	cv::erode(heat_map,erosion_dst,erosion_element);
-#endif
-
-	DUMP_IMAGE(erosion_dst,"/tmp/erosion_out.png");
-	cv::Mat dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
-											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
-											 cv::Point( dilation_size, dilation_size ) );
-
-#if (CUDA_GPU)
 	gpu_in.upload(erosion_dst);
 	cv::gpu::dilate(gpu_in, gpu_out, dilation_element);
 	gpu_out.download(heat_map);
 #else
+	cv::erode(heat_map,erosion_dst,erosion_element);
 	cv::dilate(erosion_dst,heat_map,dilation_element);
-#endif
+#endif  // CUDA
+
+	DUMP_IMAGE(erosion_dst,"/tmp/erosion_out.png");
 	DUMP_IMAGE(heat_map,"/tmp/dilation_out.png");
 
 #endif //USE_MORPHOLOGICAL_OPS
@@ -853,7 +837,9 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 				if (out_image != NULL) {
 					//cv::drawContours(Input_image, contours_poly, i, (0, 0, 255), 2, 8,hierarchy, 0, cv::Point());
 					// Draw a bounding box
-					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
+					if (bPrintDebugMsg > OFF) {
+						rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
+					}
 				} else {
 					if (bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
 				}
@@ -875,52 +861,41 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     return true;
 }
 
-#if 0
-void Compute_Luminance(cv::Mat &in, cv::Mat &out)
-{
-	double Luminance;
-	std::vector<cv::Mat> image_planes(3);
-	// Split the image in to 3 planes
-	cv::split( in, image_planes );
-	cv::Mat R = image_planes[0];
-	cv::Mat G = image_planes[1];
-	cv::Mat B = image_planes[2];
-
-	for(int i=0;i<in.rows;++i)
-	{
-		for(int j=0;j<in.cols;++j)
-		{
-			out.at<int>(rows,cols) = 0.299*R.at<int>(rows,cols) + 0.587*G.at<int>(rows,cols) + 0.114*B.at<int>(rows,cols);
-		}
-	}
-}
-#endif
-
 void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
+	if(!bInit)
+	{
+		Initialize_lib();
+		bInit = true;
+	}
 #ifdef ENABLE_TIMING
 	// Get clock
 	clock_t start_s=clock();
 #endif
-	cv::Mat lab_image,src_gray,texture_out;
+	cv::Mat lab_image,src_gray,texture_out,src_rescaled;
 	if(! imgPtr->data) {
 		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
 	}
 
+	//src_rescaled = *imgPtr;
 	Input_image = *imgPtr;
 
+	// Reduce image resolution for TK1
+	//cv::resize(src_rescaled,Input_image,cv::Size(960,540),0,0,cv::INTER_LINEAR);
+
+#if 1
 	// Add ROI to the image
 	if(camera_index >= 0 && camera_index < MAX_CAMERAS_SUPPORTED)
 	{
 		Input_image = Input_image(cv::Rect( 0,0,
 											camera_parameters[camera_index].Hpixels,
-											camera_parameters[camera_index].Vpixels-ROWS_TO_ELIMINATE));
+											camera_parameters[camera_index].Vpixels-ROWS_TO_ELIMINATE_AT_BOTTOM));
 	} else {
 		std::cout << "ERROR: Unknown number of camera's registered "<< std::endl;
 		return;
 	}
-
+#endif
 	// Convert the color space to Lab
 	cv::cvtColor(Input_image,lab_image,CV_RGB2Lab);
 	DUMP_IMAGE(Input_image,"/tmp/input.png");
@@ -962,6 +937,6 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	}
 #ifdef ENABLE_TIMING
 	clock_t stop_s=clock();  // end
-	Display_time((stop_s - start_s)/CLOCKS_PER_MS);
+	//Display_time((stop_s - start_s)/CLOCKS_PER_MS);
 #endif
 }

@@ -87,7 +87,7 @@ int main(int argc, char **argv)
 #ifndef SIMULATOR
 	/*
 	 * White
-	 */
+	 *
 	std::vector<double>L{200,55,0.6};
 	std::vector<double>a{128,20,0.1};
 	std::vector<double>b{128,30,0.3};
@@ -117,7 +117,7 @@ int main(int argc, char **argv)
 	std::vector<double>b_red{128,10,0.25};
 	std::vector<double>width_red{0.02,0.25};
 	std::vector<double>depth_red{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_red = 6000;
+	double pixel_dist_factor_red = 600;
 	register_sample(2,L_red,a_red,b_red,width_red,depth_red,moments,pixel_dist_factor_red);
 
 	/*
