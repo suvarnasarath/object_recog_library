@@ -706,7 +706,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
    	    if(contour_area < camera_parameters[camera_index].min_bb_area_in_pixels)
 		{
-   	    	//if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
+   	    	if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
 			continue;
 		} else {
 			if(bPrintDebugMsg > DEBUG)std::cout << "passed area test: " << contour_area << std::endl;
@@ -826,7 +826,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
           double dist = std::max(std::sqrt(sample.x*sample.x +  sample.y*sample.y + height),1.0);
           double expected_area = registered_sample[index].pixel_dist_factor/dist;
 
-          if(1/*contour_area > expected_area*/)
+          if(contour_area > expected_area)
           {
         	  if(bPrintDebugMsg > DEBUG)
         		  std::cout << "accepted sample area: " << contour_area << " "
@@ -837,9 +837,10 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 				if (out_image != NULL) {
 					//cv::drawContours(Input_image, contours_poly, i, (0, 0, 255), 2, 8,hierarchy, 0, cv::Point());
 					// Draw a bounding box
-					if (bPrintDebugMsg > OFF) {
+					if (bPrintDebugMsg > OFF){
 						rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
 					}
+
 				} else {
 					if (bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
 				}
@@ -882,20 +883,19 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	Input_image = *imgPtr;
 
 	// Reduce image resolution for TK1
-	//cv::resize(src_rescaled,Input_image,cv::Size(960,540),0,0,cv::INTER_LINEAR);
+	//cv::resize(src_rescaled,Input_image,cv::Size(810,1440),0,0,cv::INTER_LINEAR);
 
-#if 1
 	// Add ROI to the image
 	if(camera_index >= 0 && camera_index < MAX_CAMERAS_SUPPORTED)
 	{
 		Input_image = Input_image(cv::Rect( 0,0,
-											camera_parameters[camera_index].Hpixels,
-											camera_parameters[camera_index].Vpixels-ROWS_TO_ELIMINATE_AT_BOTTOM));
+											Input_image.cols,
+											Input_image.rows - ROWS_TO_ELIMINATE_AT_BOTTOM));
 	} else {
 		std::cout << "ERROR: Unknown number of camera's registered "<< std::endl;
 		return;
 	}
-#endif
+
 	// Convert the color space to Lab
 	cv::cvtColor(Input_image,lab_image,CV_RGB2Lab);
 	DUMP_IMAGE(Input_image,"/tmp/input.png");
@@ -937,6 +937,6 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	}
 #ifdef ENABLE_TIMING
 	clock_t stop_s=clock();  // end
-	//Display_time((stop_s - start_s)/CLOCKS_PER_MS);
+	Display_time((stop_s - start_s)/CLOCKS_PER_MS);
 #endif
 }
