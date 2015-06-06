@@ -11,6 +11,9 @@
 #include <iostream>
 #include <vector>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define MAX_CAMERAS_SUPPORTED (1)
 
