@@ -415,8 +415,6 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	cv::Mat a_channel = image_planes[1];
 	cv::Mat b_channel = image_planes[2];
 
-	std::cout << L_channel.type() << std::endl;
-
 	cv::medianBlur(L_channel,L_median,11);
 	DUMP_IMAGE(L_median,"/home/sarath/L_median.png");
 	L_channel = L_median;
