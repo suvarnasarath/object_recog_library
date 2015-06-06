@@ -2,7 +2,7 @@
 #include "detection.h"
 #include <time.h>
 
-#define DEBUG_DUMP
+//#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD   (1)
 #define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
@@ -560,7 +560,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     DUMP_IMAGE(heat_map,"/home/sarath/heat_map_mul.png");
 
 #if(USE_GLOBAL_THRESHOLD)
-    cv::threshold(heat_map,heat_map,100,255,CV_THRESH_BINARY);
+    cv::threshold(heat_map,heat_map,140,255,CV_THRESH_BINARY);
     heat_map.convertTo(heat_map, CV_8UC1);
 #elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
