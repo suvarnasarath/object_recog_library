@@ -609,7 +609,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 #if (CUDA_GPU)
     cv::gpu::GpuMat gpu_in, gpu_out;
 #endif
-    cv::Mat heat_map, sobel_out, erosion_dst, dilation_dst;
 
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
