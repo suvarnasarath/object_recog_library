@@ -937,9 +937,16 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		return;
 	}
 
+#if (CUDA_GPU)
+	cv::gpu::GpuMat gpu_in, gpu_out;
+	gpu_in.upload(Input_image);
+	cv::gpu::cvtColor(gpu_in, gpu_out,CV_RGB2Lab);
+	gpu_out.download(lab_image);
+#else
 	// Convert the color space to Lab
 	cv::cvtColor(Input_image,lab_image,CV_RGB2Lab);
 	DUMP_IMAGE(Input_image,"/tmp/input.png");
+#endif
 
 
 #ifdef ENABLE_TEXTURE_TEST
