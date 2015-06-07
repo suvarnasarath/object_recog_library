@@ -3,15 +3,15 @@
 #include <time.h>
 
 //#define DEBUG_DUMP
-#define USE_GLOBAL_THRESHOLD   (1)
-#define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
-#define USE_HSV_SPACE		   (0)
-#define USE_LAB_SPACE		   (!USE_HSV_SPACE)
-#define USE_MORPHOLOGICAL_OPS  (1)
-#define ENABLE_DEPTH_TEST	   (0)
-#define ENABLE_SHAPE_TEST	   (0)
-#define ENABLE_TEXTURE_TEST    (1)
-#define ENABLE_TIMING		   (1)
+#define USE_GLOBAL_THRESHOLD	(1)
+#define USE_ADAPTIVE_THRESHOLD	(!USE_GLOBAL_THRESHOLD)
+#define USE_HSV_SPACE		(0)
+#define USE_LAB_SPACE		(!USE_HSV_SPACE)
+#define USE_MORPHOLOGICAL_OPS	(1)
+#define ENABLE_DEPTH_TEST	(0)
+#define ENABLE_SHAPE_TEST	(0)
+#define ENABLE_TEXTURE_TEST	(1)
+#define ENABLE_TIMING		(1)
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
 // At the current pitch, tray is in the way causing reflections and thus false detections.
@@ -295,19 +295,20 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 
 void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 {
-#if (CUDA_GPU)
+#if (CUDA_GPU & 0)
 	cv::gpu::GpuMat gpu_in, gpu_in2, gpu_out;
-#endif
+#else
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
 	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
+#endif
 	int scale = 1;
 	int delta = 0;
 	int ddepth = -1;
 	int kern = 7;
 
 	/// Gradient X
-#if (CUDA_GPU)
+#if (CUDA_GPU & 0)
 	gpu_in.upload(src);
 	cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 1, 0, kern, scale, cv::BORDER_DEFAULT);
 	gpu_out.download(grad_x);
@@ -317,7 +318,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::convertScaleAbs( grad_x, abs_grad_x );
 
 	/// Gradient Y
-#if (CUDA_GPU)
+#if (CUDA_GPU & 0)
 	gpu_in.upload(src);
 	cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 0, 1, kern, scale, cv::BORDER_DEFAULT);
 	gpu_out.download(grad_y);
@@ -327,7 +328,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::convertScaleAbs( grad_y, abs_grad_y );
 
 	/// Total Gradient (approximate)
-#if (CUDA_GPU)
+#if (CUDA_GPU & 0)
 	gpu_in.upload(abs_grad_x);
 	gpu_in2.upload(abs_grad_y);
 	cv::gpu::addWeighted( gpu_in, 0.5, gpu_in2, 0.5, 0, gpu_out );
@@ -344,7 +345,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::normalize(smoothed_image,normalized_image,1.0,255.0,cv::NORM_MINMAX);
 	DUMP_IMAGE(normalized_image,"/tmp/texture_normalised_out.png");
 
-#if (CUDA_GPU)
+#if (CUDA_GPU & 0)
 	gpu_in.upload(normalized_image);
 	cv::gpu::subtract(gpu_in, 255.0, gpu_out);
 	gpu_out.download(dst);
@@ -360,7 +361,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::Mat erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
 										 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
 										 cv::Point( erosion_size, erosion_size ) );
-#if (CUDA_GPU)
+#if (CUDA_GPU & 0)
 	gpu_in.upload(dst);
 	cv::gpu::erode(gpu_in, gpu_out, erosion_element);
 	gpu_out.download(erosion_dst);
@@ -372,7 +373,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::Mat dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
 											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
 											 cv::Point( dilation_size, dilation_size ) );
-#if (CUDA_GPU)
+#if (CUDA_GPU & 0)
 	gpu_in.upload(erosion_dst);
 	cv::gpu::dilate(gpu_in, gpu_out, dilation_element);
 	gpu_out.download(dst);
@@ -480,7 +481,7 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 
 #if (CUDA_GPU)
     gpu_in.upload(L_inter);
-    cv::gpu::GaussianBlur(gpu_in, gpu_out, cv::Size(159,159),10,0,cv::BORDER_DEFAULT);
+    cv::gpu::GaussianBlur(gpu_in, gpu_out, cv::Size(31,31),50,0,cv::BORDER_DEFAULT);
     gpu_out.download(blurred_heatmap);
 #else
     cv::GaussianBlur(L_inter,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
@@ -607,7 +608,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     cv::Mat heat_map, erosion_dst, dilation_dst;
 #if (CUDA_GPU)
-    cv::gpu::GpuMat gpu_in, gpu_out;
+    cv::gpu::GpuMat gpu_in, gpu_in2, gpu_out;
 #endif
 
     std::vector<std::vector<cv::Point> > contours;
@@ -646,14 +647,15 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     if(texture_image.data)
     {
-#if (CUDA_GPU)
+/*#if (CUDA_GPU)
 	gpu_in.upload(texture_image);
-	gpu_out.upload(heat_map);
-	cv::gpu::multiply(gpu_in, gpu_out, gpu_in, 1/255.0,CV_32FC1);
-	gpu_in.download(heat_map);
+	gpu_in2.upload(heat_map);
+	cv::gpu::multiply(gpu_in, gpu_in2, gpu_out, 1/255.0,CV_32FC1);
+	gpu_out.download(heat_map);
 #else
+*/
     	cv::multiply(texture_image,heat_map,heat_map,1/255.0,CV_32FC1);
-#endif
+//#endif
     }
     DUMP_IMAGE(heat_map,"/tmp/heat_map_mul.png");
 
