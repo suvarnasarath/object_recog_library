@@ -15,7 +15,7 @@
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
 // At the current pitch, tray is in the way causing reflections and thus false detections.
-#define ROWS_TO_ELIMINATE_AT_BOTTOM (65)
+#define ROWS_TO_ELIMINATE_AT_BOTTOM (95)
 #define ROWS_TO_ELIMINATE_AT_TOP    (ROWS_TO_ELIMINATE_AT_BOTTOM)
 
 #ifdef DEBUG_DUMP
@@ -130,11 +130,6 @@ void set_debug(LOGLEVEL level)
 	if(bPrintDebugMsg > DEBUG)
 	{
 		std::cout << "Debug messages enabled:" << std::endl;
-	}
-	struct stat st = {0};
-
-	if (stat("/home/tmp/lib_obj_recog", &st) == -1) {
-	    mkdir("/home/tmp/lib_obj_recog", 0700);
 	}
 }
 
@@ -364,7 +359,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst );
 #endif
 
-	DUMP_IMAGE(dst,"tmp/texture_derivative_out.png");
+	DUMP_IMAGE(dst,"/tmp/texture_derivative_out.png");
 
 	cv::medianBlur(dst,smoothed_image,39);
 	DUMP_IMAGE(smoothed_image,"/tmp/texture_median_out.png");
@@ -394,10 +389,9 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::dilate(erosion_dst,dst,dilation_element);
 
 #endif // CUDA
-#endif //USE_MORPHOLOGICAL_OPS
-
 	DUMP_IMAGE(dst,"/tmp/texture_dilation_out.png");
 	DUMP_IMAGE(erosion_dst,"/tmp/texture_erosion_out.png");
+#endif //USE_MORPHOLOGICAL_OPS
 }
 
 
@@ -835,10 +829,11 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 				detected_samples.push_back(sample);
 
 				if (out_image != NULL) {
-					//cv::drawContours(Input_image, contours_poly, i, (0, 0, 255), 2, 8,hierarchy, 0, cv::Point());
+					 //cv::drawContours(Input_image, contours_poly, i, (0, 0, 255), 2, 8,hierarchy, 0, cv::Point());
 					// Draw a bounding box
 					if (bPrintDebugMsg > OFF){
 						rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
+						DUMP_IMAGE(Input_image,"/tmp/BB.png");
 					}
 
 				} else {
@@ -847,13 +842,16 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 			} else {
 				if (bPrintDebugMsg > DEBUG) {
 					std::cout << "detected small contour" << std::endl;
-					std::cout << "accepted sample area: " << contour_area << " "
-										  << "expected_area:  " <<expected_area <<std::endl;
 				}
 			}
 		} else {
 			if (bPrintDebugMsg > DEBUG)
-				std::cout << "detected very small sample" << std::endl;
+			{
+				if(sample.projected_width < registered_sample[index].min_width)
+					std::cout << "detected a small sample" << std::endl;
+				else if(sample.projected_width > registered_sample[index].max_width)
+					std::cout << "detected a large sample" << std::endl;
+			}
 		}
 	}
     // Print the number of samples found
@@ -861,6 +859,10 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		std::cout << "Number of samples found: "<< detected_samples.size() << std::endl;
     return true;
 }
+
+#define SCALE	(3/4)
+#define RESCALED_ROWS (1080*SCALE)
+#define RESCALED_COLS (1920*SCALE)
 
 void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
@@ -879,12 +881,15 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		return;
 	}
 
-	//src_rescaled = *imgPtr;
-	Input_image = *imgPtr;
+	//Input_image = *imgPtr;
+	src_rescaled = *imgPtr;
 
-	// Reduce image resolution for TK1
-	//cv::resize(src_rescaled,Input_image,cv::Size(810,1440),0,0,cv::INTER_LINEAR);
+	// Reduce input image resolution to speed up processing.
+	cv::resize(src_rescaled,Input_image,cv::Size(810/*RESCALED_ROWS,RESCALED_COLS*/,1440),0,0,cv::INTER_LINEAR);
 
+	camera_parameters[0].Hpixels = Input_image.cols;
+	camera_parameters[0].Vpixels = Input_image.rows;
+#if 1
 	// Add ROI to the image
 	if(camera_index >= 0 && camera_index < MAX_CAMERAS_SUPPORTED)
 	{
@@ -895,7 +900,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		std::cout << "ERROR: Unknown number of camera's registered "<< std::endl;
 		return;
 	}
-
+#endif
 	// Convert the color space to Lab
 	cv::cvtColor(Input_image,lab_image,CV_RGB2Lab);
 	DUMP_IMAGE(Input_image,"/tmp/input.png");
