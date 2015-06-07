@@ -45,7 +45,7 @@ void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S
 int main(int argc, char **argv)
 {
 	// Turn off debug messages.
-	set_debug(OFF);
+	set_debug(VERBOSE);
 	/*******************************/
 	/******** Register camera ******/
 	/*******************************/
@@ -91,9 +91,9 @@ int main(int argc, char **argv)
 	std::vector<double>L{200,55,0.6};
 	std::vector<double>a{128,20,0.1};
 	std::vector<double>b{128,30,0.3};
-	std::vector<double>width{0.01,1.3};
+	std::vector<double>width{0.01,0.3};
 	std::vector<double>depth{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_white = 4500;
+	double pixel_dist_factor_white = 8000;
 	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
 
 #else

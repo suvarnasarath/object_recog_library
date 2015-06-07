@@ -2,7 +2,7 @@
 #include "detection.h"
 #include <time.h>
 
-//#define DEBUG_DUMP
+#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD   (1)
 #define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
@@ -12,6 +12,7 @@
 #define ENABLE_SHAPE_TEST	   (0)
 #define ENABLE_TEXTURE_TEST    (1)
 #define ENABLE_TIMING		   (1)
+#define ENABLE_RESIZING		   (1)
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
 // At the current pitch, tray is in the way causing reflections and thus false detections.
@@ -474,7 +475,6 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 									   const channel_info & b_info,cv::Mat &out,
 									   std::vector<cv::Mat>&image_planes)
 {
-
 	cv::Mat input = in_lab,response,L_median,L_inter;
 	cv::Mat L_channel = image_planes[0];
 	cv::Mat a_channel = image_planes[1];
@@ -497,9 +497,10 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
     cv::gpu::GaussianBlur(gpu_in, gpu_out, cv::Size(159,159),10,0,cv::BORDER_DEFAULT);
     gpu_out.download(blurred_heatmap);
 #else
+    // Use the more efficient 1D kernels in sequence instead of the high level GaussianBlur.
     //cv::GaussianBlur(L_inter,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
-    cv::sepFilter2D(L_inter,blurred_heatmap,CV_32F,GKernelX,GKernelY);
-
+    cv::boxFilter(L_inter,blurred_heatmap,-1,cv::Size(159,159));
+    //cv::sepFilter2D(L_inter,blurred_heatmap,CV_32F,GKernelX,GKernelY);
 #endif
 
 
@@ -633,7 +634,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
     							registered_sample[index].channel3,heat_map,image_planes);
 #elif(USE_LAB_SPACE)
-
     generate_heat_map_LAB(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
         							registered_sample[index].channel3,heat_map,image_planes);
 #endif
@@ -829,14 +829,14 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
           {
         	  if(bPrintDebugMsg > DEBUG)
         		  std::cout << "accepted sample area: " << contour_area << " "
-						  << "expected_area:  " <<expected_area <<std::endl;
+						    << "expected_area:  " <<expected_area <<std::endl;
 				// Push the sample
 				detected_samples.push_back(sample);
 
 				if (out_image != NULL) {
 					 //cv::drawContours(Input_image, contours_poly, i, (0, 0, 255), 2, 8,hierarchy, 0, cv::Point());
 					// Draw a bounding box
-					if (bPrintDebugMsg > OFF){
+					if (bPrintDebugMsg > OFF) {
 						rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
 						DUMP_IMAGE(Input_image,"/tmp/BB.png");
 					}
@@ -871,30 +871,32 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
 void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
+#ifdef ENABLE_TIMING
+	// Get clock
+	clock_t start_s=clock();
+#endif
 	if(!bInit)
 	{
 		Initialize_lib();
 		bInit = true;
 	}
-#ifdef ENABLE_TIMING
-	// Get clock
-	clock_t start_s=clock();
-#endif
+
 	cv::Mat lab_image,src_gray,texture_out,src_rescaled;
 	if(! imgPtr->data) {
 		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
 	}
 
-	//Input_image = *imgPtr;
+#ifdef ENABLE_RESIZING
 	src_rescaled = *imgPtr;
 
 	// Reduce input image resolution to speed up processing.
 	cv::resize(src_rescaled,Input_image,cv::Size(810/*RESCALED_ROWS,RESCALED_COLS*/,1440),0,0,cv::INTER_LINEAR);
 
+	// Adjust the camera parameters according to the new image size
 	camera_parameters[0].Hpixels = Input_image.cols;
 	camera_parameters[0].Vpixels = Input_image.rows;
-#if 1
+
 	// Add ROI to the image
 	if(camera_index >= 0 && camera_index < MAX_CAMERAS_SUPPORTED)
 	{
@@ -905,7 +907,9 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		std::cout << "ERROR: Unknown number of camera's registered "<< std::endl;
 		return;
 	}
-#endif
+#else
+	Input_image = *imgPtr;
+#endif //ENABLE_RESIZING
 	// Convert the color space to Lab
 	cv::cvtColor(Input_image,lab_image,CV_RGB2Lab);
 	DUMP_IMAGE(Input_image,"/tmp/input.png");
