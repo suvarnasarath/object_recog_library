@@ -2,7 +2,7 @@
 #include "detection.h"
 #include <time.h>
 
-//#define DEBUG_DUMP
+#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD   (1)
 #define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
@@ -615,7 +615,7 @@ void getPixelCount(unsigned int camera_index, double Dist2Sample, double &min_si
 	double width = 0.0685;   // Sample width in meters
 	double height = 0.0635;  // Sample height in meters
 
-	double thresh = 0.02;
+	double thresh = 0.03;
 
 	double min_width = width - thresh;
 	double max_width = width + thresh;
@@ -801,7 +801,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         dist = std::max(std::sqrt(sample.x*sample.x + sample.y*sample.y +
         		 	 	 	 	  camera_parameters[camera_index].height*camera_parameters[camera_index].height),0.5);
 
-        if(dist > 5.0 || dist < 0.5)
+        if(dist > 3.5 || dist < 0.5)
         {
         	continue;
         }
@@ -814,7 +814,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 			std::cout << "computed_area_in_pixels: "<<computed_area_in_pixels << std::endl;
        	}
 
-        if((computed_area_in_pixels < max_expected_size) && (computed_area_in_pixels > min_expected_size)
+        if((computed_area_in_pixels > min_expected_size) && (computed_area_in_pixels < max_expected_size)
 #if ENABLE_DEPTH_TEST
         		&&
            (sample.projected_depth > registered_sample[index].min_depth &&
