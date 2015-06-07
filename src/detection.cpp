@@ -32,6 +32,7 @@
 
 #define CLOCKS_PER_SEC  1000000l
 #define CLOCKS_PER_MS   (CLOCKS_PER_SEC/1000)
+
 void Display_time(clock_t time_elapsed)
 {
 	std::cout << "-------------------------" << std::endl;
@@ -107,6 +108,11 @@ void set_debug(LOGLEVEL level)
 	if(bPrintDebugMsg > DEBUG)
 	{
 		std::cout << "Debug messages enabled:" << std::endl;
+	}
+	struct stat st = {0};
+
+	if (stat("/home/tmp/lib_obj_recog", &st) == -1) {
+	    mkdir("/home/tmp/lib_obj_recog", 0700);
 	}
 }
 
@@ -290,7 +296,7 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 {
 #if (CUDA_GPU)
-	cv::gpu::GpuMat gpu_in, gpu_out;
+	cv::gpu::GpuMat gpu_in, gpu_in2, gpu_out;
 #endif
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
@@ -313,23 +319,38 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	/// Gradient Y
 #if (CUDA_GPU)
 	gpu_in.upload(src);
-        cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 0, 1, kern, scale, cv::BORDER_DEFAULT);
-        gpu_out.download(grad_y);
+	cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 0, 1, kern, scale, cv::BORDER_DEFAULT);
+	gpu_out.download(grad_y);
 #else
 	cv::Sobel( src, grad_y, ddepth, 0, 1, kern, scale, delta, cv::BORDER_DEFAULT );
 #endif
 	cv::convertScaleAbs( grad_y, abs_grad_y );
 
 	/// Total Gradient (approximate)
+#if (CUDA_GPU)
+	gpu_in.upload(abs_grad_x);
+	gpu_in2.upload(abs_grad_y);
+	cv::gpu::addWeighted( gpu_in, 0.5, gpu_in2, 0.5, 0, gpu_out );
+	gpu_out.download(dst);
+#else
 	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst );
-	DUMP_IMAGE(dst,"/tmp/texture_derivative_out.png");
+#endif
+
+	DUMP_IMAGE(dst,"tmp/texture_derivative_out.png");
 
 	cv::medianBlur(dst,smoothed_image,39);
 	DUMP_IMAGE(smoothed_image,"/tmp/texture_median_out.png");
 
 	cv::normalize(smoothed_image,normalized_image,1.0,255.0,cv::NORM_MINMAX);
 	DUMP_IMAGE(normalized_image,"/tmp/texture_normalised_out.png");
+
+#if (CUDA_GPU)
+	gpu_in.upload(normalized_image);
+	cv::gpu::subtract(255.0,gpu_in,gpu_out);
+	gpu_out.download(dst);
+#else
 	cv::subtract(255.0,normalized_image,dst);
+#endif
 
 #if (USE_MORPHOLOGICAL_OPS)
     int erosion_size = 4;
@@ -588,7 +609,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 #if (CUDA_GPU)
     cv::gpu::GpuMat gpu_in, gpu_out;
 #endif
-    cv::Mat heat_map, sobel_out, erosion_dst, dilation_dst;
 
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
