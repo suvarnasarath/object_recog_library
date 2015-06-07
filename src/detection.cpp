@@ -394,7 +394,6 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 #else
 	cv::erode(dst,erosion_dst,erosion_element);
 	cv::dilate(erosion_dst,dst,dilation_element);
-
 #endif // CUDA
 	DUMP_IMAGE(dst,"/tmp/texture_dilation_out.png");
 	DUMP_IMAGE(erosion_dst,"/tmp/texture_erosion_out.png");
@@ -498,8 +497,8 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
     gpu_out.download(blurred_heatmap);
 #else
     // Use the more efficient 1D kernels in sequence instead of the high level GaussianBlur.
-    //cv::GaussianBlur(L_inter,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
-    cv::boxFilter(L_inter,blurred_heatmap,-1,cv::Size(159,159));
+    cv::GaussianBlur(L_inter,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
+    //cv::boxFilter(L_inter,blurred_heatmap,-1,cv::Size(159,159));
     //cv::sepFilter2D(L_inter,blurred_heatmap,CV_32F,GKernelX,GKernelY);
 #endif
 
