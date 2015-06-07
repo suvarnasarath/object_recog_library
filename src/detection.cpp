@@ -469,7 +469,7 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 
 #if (CUDA_GPU)
     gpu_in.upload(blurred_heatmap);
-    cv::gpu::add(1, gpu_in, gpu_out);
+    cv::gpu::add(gpu_in, 1, gpu_out);
     gpu_out.download(dst);
 #else
     cv::add(1,blurred_heatmap,dst);
@@ -487,7 +487,7 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 
 #if (CUDA_GPU)
     gpu_in.upload(L_inter);
-    cv::gpu::multiply(128, gpu_in, gpu_out);
+    cv::gpu::multiply(gpu_in, 128, gpu_out);
     gpu_out.download(L_inter);
 #else
     cv::multiply(128,L_inter,L_inter);
