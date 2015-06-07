@@ -45,6 +45,12 @@ void Display_time(clock_t time_elapsed)
 LOGLEVEL bPrintDebugMsg = OFF;
 
 cv::Mat Input_image, erosion_element, dilation_element;
+
+// Gaussian kernels in X and Y
+cv::Mat GKernelX = cv::getGaussianKernel(159,50,CV_32FC1);
+cv::Mat GKernelY = cv::getGaussianKernel(159,0,CV_32FC1);
+
+// Init flag
 bool bInit = false;
 
 /*
@@ -463,7 +469,6 @@ void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
 	out = response;
 }
 
-
 void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 									   const channel_info & a_info,
 									   const channel_info & b_info,cv::Mat &out,
@@ -492,8 +497,8 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
     cv::gpu::GaussianBlur(gpu_in, gpu_out, cv::Size(159,159),10,0,cv::BORDER_DEFAULT);
     gpu_out.download(blurred_heatmap);
 #else
-    cv::GaussianBlur(L_inter,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
-    //cv::boxFilter(L_inter,blurred_heatmap,5,cv::Size(159,159));
+    //cv::GaussianBlur(L_inter,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
+    cv::sepFilter2D(L_inter,blurred_heatmap,CV_32F,GKernelX,GKernelY);
 
 #endif
 
