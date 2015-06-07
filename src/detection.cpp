@@ -2,7 +2,7 @@
 #include "detection.h"
 #include <time.h>
 
-#define DEBUG_DUMP
+//#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD   (1)
 #define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
