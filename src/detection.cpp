@@ -2,7 +2,7 @@
 #include "detection.h"
 #include <time.h>
 
-#define DEBUG_DUMP
+//#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD   (1)
 #define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
@@ -706,7 +706,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
    	    if(contour_area < camera_parameters[camera_index].min_bb_area_in_pixels)
 		{
-   	    	if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
+   	    	//if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
 			continue;
 		} else {
 			if(bPrintDebugMsg > DEBUG)std::cout << "passed area test: " << contour_area << std::endl;
