@@ -60,7 +60,7 @@ int main(int argc, char **argv)
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
 	param.yaw = 0;
-	param.min_bb_area_in_pixels =2000;
+	param.min_bb_area_in_pixels =100;
 	register_camera(0,&param);
 
 	/********************************/
@@ -87,7 +87,7 @@ int main(int argc, char **argv)
 #ifndef SIMULATOR
 	/*
 	 * White
-	 */
+	 *
 	std::vector<double>L{200,55,0.6};
 	std::vector<double>a{128,20,0.1};
 	std::vector<double>b{128,30,0.3};
@@ -95,7 +95,7 @@ int main(int argc, char **argv)
 	std::vector<double>depth{MIN_DEPTH,MAX_DEPTH};
 	double pixel_dist_factor_white = 6000;
 	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
-
+*/
 #else
 	/*
 	 * White
@@ -111,11 +111,11 @@ int main(int argc, char **argv)
 #endif
 	/*
 	 * Red
-	 *
-	std::vector<double>L_red{163,40,0.2};
-	std::vector<double>a_red{200,40,0.55};
-	std::vector<double>b_red{128,10,0.25};
-	std::vector<double>width_red{0.02,0.25};
+	 */
+	std::vector<double>L_red{160,40,0.2};
+	std::vector<double>a_red{180,30,0.55};
+	std::vector<double>b_red{128,30,0.25};
+	std::vector<double>width_red{0.0,0.5};
 	std::vector<double>depth_red{MIN_DEPTH,MAX_DEPTH};
 	double pixel_dist_factor_red = 600;
 	register_sample(2,L_red,a_red,b_red,width_red,depth_red,moments,pixel_dist_factor_red);

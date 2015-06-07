@@ -2,7 +2,6 @@
 #include "detection.h"
 #include <time.h>
 
-#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD   (1)
 #define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		   (0)
@@ -18,6 +17,7 @@
 #define ROWS_TO_ELIMINATE_AT_BOTTOM (65)
 #define ROWS_TO_ELIMINATE_AT_TOP    (ROWS_TO_ELIMINATE_AT_BOTTOM)
 
+#define DEBUG_DUMP
 #ifdef DEBUG_DUMP
 #define DUMP_IMAGE(IMG,FILE) cv::imwrite(FILE,IMG);
 #else
@@ -364,8 +364,8 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst );
 #endif
 
-	DUMP_IMAGE(dst,"tmp/texture_derivative_out.png");
-
+	DUMP_IMAGE(dst,"/tmp/texture_derivative_out.png");
+/*
 	cv::medianBlur(dst,smoothed_image,39);
 	DUMP_IMAGE(smoothed_image,"/tmp/texture_median_out.png");
 
@@ -380,7 +380,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::subtract(255.0,normalized_image,dst);
 #endif
 
-#if (USE_MORPHOLOGICAL_OPS)
+#if (USE_MORPHOLOGICAL_OPS & 0)
 #if (CUDA_GPU)
 
 	gpu_in.upload(dst);
@@ -394,10 +394,10 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::dilate(erosion_dst,dst,dilation_element);
 
 #endif // CUDA
-#endif //USE_MORPHOLOGICAL_OPS
-
 	DUMP_IMAGE(dst,"/tmp/texture_dilation_out.png");
 	DUMP_IMAGE(erosion_dst,"/tmp/texture_erosion_out.png");
+#endif //USE_MORPHOLOGICAL_OPS
+*/
 }
 
 
@@ -481,9 +481,9 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	cv::Mat a_channel = image_planes[1];
 	cv::Mat b_channel = image_planes[2];
 
-	cv::medianBlur(L_channel,L_median,11);
-	DUMP_IMAGE(L_median,"/tmp/L_median.png");
-	L_channel = L_median;
+	//cv::medianBlur(L_channel,L_median,11);
+	//DUMP_IMAGE(L_median,"/tmp/L_median.png");
+	//L_channel = L_median;
 	L_channel.convertTo(L_inter,CV_32FC1);
 
 #if (CUDA_GPU)
@@ -826,7 +826,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
           double dist = std::max(std::sqrt(sample.x*sample.x +  sample.y*sample.y + height),1.0);
           double expected_area = registered_sample[index].pixel_dist_factor/dist;
 
-          if(contour_area > expected_area)
+          if(1 /*contour_area > expected_area*/)
           {
         	  if(bPrintDebugMsg > DEBUG)
         		  std::cout << "accepted sample area: " << contour_area << " "
@@ -873,7 +873,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	// Get clock
 	clock_t start_s=clock();
 #endif
-	cv::Mat lab_image,src_gray,texture_out,src_rescaled;
+	cv::Mat lab_image,src_gray,texture_out,src_rescaled,src_blurred;
 	if(! imgPtr->data) {
 		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
@@ -903,7 +903,10 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 
 #ifdef ENABLE_TEXTURE_TEST
 	cv::cvtColor(Input_image,src_gray,CV_RGB2GRAY);
-	GetTextureImage(src_gray,texture_out);
+	DUMP_IMAGE(src_gray,"/tmp/texture_in.png");
+	cv::GaussianBlur(src_gray,src_blurred,cv::Size(9,9),5,0,cv::BORDER_DEFAULT);
+	DUMP_IMAGE(src_blurred,"/tmp/texture_in_blur.png");
+	GetTextureImage(src_blurred,texture_out);
 	DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
 #endif
 	// Clear detected_samples structure before filling in with new data
