@@ -295,20 +295,20 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 
 void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 {
-#if (CUDA_GPU & 0)
+#if (CUDA_GPU)
 	cv::gpu::GpuMat gpu_in, gpu_in2, gpu_out;
-#else
+#endif
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
 	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
-#endif
+//#endif
 	int scale = 1;
 	int delta = 0;
 	int ddepth = -1;
 	int kern = 7;
 
 	/// Gradient X
-#if (CUDA_GPU & 0)
+#if (CUDA_GPU)
 	gpu_in.upload(src);
 	cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 1, 0, kern, scale, cv::BORDER_DEFAULT);
 	gpu_out.download(grad_x);
@@ -318,7 +318,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::convertScaleAbs( grad_x, abs_grad_x );
 
 	/// Gradient Y
-#if (CUDA_GPU & 0)
+#if (CUDA_GPU)
 	gpu_in.upload(src);
 	cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 0, 1, kern, scale, cv::BORDER_DEFAULT);
 	gpu_out.download(grad_y);
@@ -328,24 +328,28 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::convertScaleAbs( grad_y, abs_grad_y );
 
 	/// Total Gradient (approximate)
-#if (CUDA_GPU & 0)
+#if (CUDA_GPU)
 	gpu_in.upload(abs_grad_x);
 	gpu_in2.upload(abs_grad_y);
 	cv::gpu::addWeighted( gpu_in, 0.5, gpu_in2, 0.5, 0, gpu_out );
 	gpu_out.download(dst);
 #else
 	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst );
+	DUMP_IMAGE(dst,"tmp/texture_derivative_out.png");
 #endif
 
-	DUMP_IMAGE(dst,"tmp/texture_derivative_out.png");
-
+#if (CUDA_GPU)
+	cv::gpu::boxFilter(gpu_in, gpu_out, CV_8U, cv::Size(39,39));
+	gpu_out.download(smoothed_image);
+#else
 	cv::medianBlur(dst,smoothed_image,39);
 	DUMP_IMAGE(smoothed_image,"/tmp/texture_median_out.png");
+#endif
 
 	cv::normalize(smoothed_image,normalized_image,1.0,255.0,cv::NORM_MINMAX);
 	DUMP_IMAGE(normalized_image,"/tmp/texture_normalised_out.png");
 
-#if (CUDA_GPU & 0)
+#if (CUDA_GPU)
 	gpu_in.upload(normalized_image);
 	cv::gpu::subtract(gpu_in, 255.0, gpu_out);
 	gpu_out.download(dst);
@@ -361,7 +365,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::Mat erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
 										 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
 										 cv::Point( erosion_size, erosion_size ) );
-#if (CUDA_GPU & 0)
+#if (CUDA_GPU)
 	gpu_in.upload(dst);
 	cv::gpu::erode(gpu_in, gpu_out, erosion_element);
 	gpu_out.download(erosion_dst);
@@ -373,7 +377,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::Mat dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
 											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
 											 cv::Point( dilation_size, dilation_size ) );
-#if (CUDA_GPU & 0)
+#if (CUDA_GPU)
 	gpu_in.upload(erosion_dst);
 	cv::gpu::dilate(gpu_in, gpu_out, dilation_element);
 	gpu_out.download(dst);
