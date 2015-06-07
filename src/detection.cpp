@@ -894,8 +894,8 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	cv::resize(src_rescaled,Input_image,cv::Size(810/*RESCALED_ROWS,RESCALED_COLS*/,1440),0,0,cv::INTER_LINEAR);
 
 	// Adjust the camera parameters according to the new image size
-	camera_parameters[0].Hpixels = Input_image.cols;
-	camera_parameters[0].Vpixels = Input_image.rows;
+	camera_parameters[camera_index].Hpixels = Input_image.cols;
+	camera_parameters[camera_index].Vpixels = Input_image.rows;
 
 	// Add ROI to the image
 	if(camera_index >= 0 && camera_index < MAX_CAMERAS_SUPPORTED)
