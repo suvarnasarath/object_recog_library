@@ -12,7 +12,7 @@
 #define ENABLE_SHAPE_TEST	   (0)
 #define ENABLE_TEXTURE_TEST    (1)
 #define ENABLE_TIMING		   (1)
-#define ENABLE_RESIZING		   (1)
+#define ENABLE_RESIZING		   (0)
 
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
@@ -615,6 +615,48 @@ bool compare_HuMoments(const std::vector<double> &GroundtruthHuMoments, const do
 	return true;
 }
 
+void getPixelCount(unsigned int camera_index, double Dist2Sample, double &min_size, double &max_size)
+{
+	float min_sample_size_pixels = 0.0;
+	float max_sample_size_pixels = 0.0;
+	double K1 = (1920/1.4);
+	double K2 = (1080/0.7);
+	double width = 0.0685;   // Sample width in meters
+	double height = 0.0635;  // Sample height in meters
+
+	double thresh = 0.03;
+
+	double min_width = width - thresh;
+	double max_width = width + thresh;
+	double min_height = height - thresh;
+	double max_height = height + thresh;
+
+	double min_width_angle = std::atan(min_width/(2*Dist2Sample));
+	double max_width_angle = std::atan(max_width/(2*Dist2Sample));
+
+	double min_height_angle = std::atan(min_height/(2*Dist2Sample));
+	double max_height_angle = std::atan(max_height/(2*Dist2Sample));
+
+	min_size = 4*K1*K2 * min_width_angle * min_height_angle ;//PixelsX*PixelsY;
+	max_size = 4*K1*K2 * max_width_angle * max_height_angle ;//PixelsX*PixelsY;
+
+	if (bPrintDebugMsg > OFF & 0)
+	{
+		std::cout << "K1: " << K1 << std::endl;
+		std::cout << "K2: " << K2 << std::endl;
+		std::cout << "Distance to sample: " << Dist2Sample << std::endl;
+
+		std::cout << "width: "<< width << std::endl;
+		std::cout << "height: "<< height << std::endl;
+		std::cout << "min_width_angle: " << min_width_angle << std::endl;
+		std::cout << "min_height_angle: " << min_height_angle << std::endl;
+		std::cout << "max_width_angle: " << max_width_angle << std::endl;
+		std::cout << "max_height_angle: " << max_height_angle << std::endl;
+		std::cout << "min_sample_size_pixels: " << min_sample_size_pixels << std::endl;
+		std::cout << "max_sample_size_pixels: " << max_sample_size_pixels << std::endl;
+	}
+}
+
 bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image,
 				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,cv::Mat texture_image,
 				   std::vector<cv::Mat> &image_planes)
@@ -637,7 +679,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
-    double contour_area;
+    double computed_area_in_pixels, height, dist, expected_area_in_pixels;
+    double min_expected_size,max_expected_size;
 
 #if(USE_HSV_SPACE)
     generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
@@ -715,16 +758,6 @@ heat_map.convertTo(heat_map, CV_8UC1);
         cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 10.0, false );
         boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
 
-        contour_area = cv::contourArea(contours[i]);
-
-   	    if(contour_area < camera_parameters[camera_index].min_bb_area_in_pixels)
-		{
-   	    	//if(bPrintDebugMsg > DEBUG)std::cout << "failed area test: " << contour_area << std::endl;
-			continue;
-		} else {
-			if(bPrintDebugMsg > DEBUG)std::cout << "passed area test: " << contour_area << std::endl;
-		}
-
 #if ENABLE_SHAPE_TEST
    	    double HuMoments[7];
    	    // Compute Moments
@@ -743,52 +776,22 @@ heat_map.convertTo(heat_map, CV_8UC1);
          // Get the pixel coordinates of the rectangular bounding box
         cv::Point tl = boundRect[i].tl();
         cv::Point br = boundRect[i].br();
-
-        if(bPrintDebugMsg > DEBUG)
-        {
-			std::cout << "TL: "<<tl.x << " "<< tl.y << std::endl;
-			std::cout << "BR: "<<br.x << " "<< br.y << std::endl;
-        }
-
         // Mid point of the bounding box bottom side
         pxl_cntr_btm.u = (tl.x + br.x)/2;
         pxl_cntr_btm.v = br.y;
-
-        if(bPrintDebugMsg > DEBUG)
-        {
-			std::cout << "pxl_cntr_btm:("<< pxl_cntr_btm.u <<","<< pxl_cntr_btm.v << ")"<<std::endl;
-        }
-
         // Left point of the bounding box bottom side
         pxl_left_btm.u = tl.x;
         pxl_left_btm.v = br.y;
-
-        if(bPrintDebugMsg > DEBUG)
-        {
-			std::cout << "pxl_left_btm:("<< pxl_left_btm.u <<","<< pxl_left_btm.v <<")" <<std::endl;
-        }
-
-        // Left point of the bounding box bottom side
+        // Right point of the bounding box bottom side
         pxl_right_btm.u = br.x;
         pxl_right_btm.v = br.y;
-
-        if(bPrintDebugMsg > DEBUG)
-        {
-			std::cout << "pxl_right_btm:("<< pxl_right_btm.u <<","<< pxl_right_btm.v <<")" <<std::endl;
-        }
-
-
+        // Left point of the bounding box top
         pxl_left_tp.u = tl.x;
         pxl_left_tp.v = tl.y;
-
+        // Right point of the bounding box top
         pxl_right_tp.u = br.x;
         pxl_right_tp.v = tl.y;
 
-        if(bPrintDebugMsg > DEBUG)
-        {
-        	std::cout << "pxl_left_tp:("<< pxl_left_tp.u <<","<< pxl_left_tp.v <<")"<<std::endl;
-        	std::cout << "pxl_right_tp:("<< pxl_right_tp.u <<" , "<< pxl_right_tp.v <<")" <<std::endl;
-        }
         // Get world position of the above 3 pixels in world
         world_cntr_btm  = get_world_pos(camera_index,pxl_cntr_btm);
         world_left_btm  = get_world_pos(camera_index,pxl_left_btm);
@@ -800,33 +803,32 @@ heat_map.convertTo(heat_map, CV_8UC1);
         sample.x = world_cntr_btm.x;
         sample.y = world_cntr_btm.y;
 
+        // World position of the top center pixel in the bounding box
         world_cntr_tp.x = 0.5*(world_right_tp.x+ world_left_tp.x);
         world_cntr_tp.y = 0.5*(world_right_tp.y+ world_left_tp.y);
 
-
-        if(bPrintDebugMsg > DEBUG)
-		{
-        	std::cout << "world_cntr_tp:("<<  world_cntr_tp.x <<","<< world_cntr_tp.y <<")" << std::endl;
-        	std::cout << "world_left_tp:("<<  world_left_tp.x <<","<< world_left_tp.y <<")" << std::endl;
-        	std::cout << "world_right_tp:("<<  world_right_tp.x <<"," << world_right_tp.y <<")" << std::endl;
-        	std::cout << "world_cntr_btm:("<<  world_cntr_btm.x <<","<< world_cntr_btm.y <<")" << std::endl;
-			std::cout << "world_left_btm:("<<  world_left_btm.x <<"," << world_left_btm.y <<")" << std::endl;
-			std::cout << "world_right_btm:( "<<  world_right_btm.x <<"," << world_right_btm.y <<")" << std::endl;
-		}
-
-
+        // Sample world position
         sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
         sample.projected_depth = std::abs(world_cntr_tp.x - world_cntr_btm.x);
 
-        if (bPrintDebugMsg > DEBUG) {
-			std::cout << "sample:(" << sample.x  <<","<< sample.y  <<")" <<std::endl;
+        // Compute sample distance
+        dist = std::max(std::sqrt(sample.x*sample.x + sample.y*sample.y +
+        		 	 	 	 	  camera_parameters[camera_index].height*camera_parameters[camera_index].height),0.5);
 
-			std::cout << "sample width:  " << sample.projected_width<< std::endl;
-			std::cout << "sample depth:  " << sample.projected_depth<< std::endl;
-		}
+        if(dist > 3.5 || dist < 0.5)
+        {
+        	continue;
+        }
+        // Compute sample size
+       	getPixelCount(camera_index, dist,min_expected_size,max_expected_size);
+       	computed_area_in_pixels = cv::contourArea(contours[i]);
+       	if (bPrintDebugMsg > OFF) {
+			std::cout << "min_expected_area_in_pixels: "<<min_expected_size << std::endl;
+			std::cout << "max_expected_area_in_pixels: "<<max_expected_size <<std::endl;
+			std::cout << "computed_area_in_pixels: "<<computed_area_in_pixels << std::endl;
+       	}
 
-        if((sample.projected_width > registered_sample[index].min_width &&
-        	sample.projected_width < registered_sample[index].max_width)
+        if((computed_area_in_pixels > min_expected_size) && (computed_area_in_pixels < max_expected_size)
 #if ENABLE_DEPTH_TEST
         		&&
            (sample.projected_depth > registered_sample[index].min_depth &&
@@ -834,41 +836,51 @@ heat_map.convertTo(heat_map, CV_8UC1);
 #endif
         	)
         {
+			// Push the sample
+			detected_samples.push_back(sample);
 
-          double height = camera_parameters[camera_index].height * camera_parameters[camera_index].height;
-          double dist = std::max(std::sqrt(sample.x*sample.x +  sample.y*sample.y + height),1.0);
-          double expected_area = registered_sample[index].pixel_dist_factor/dist;
+			if (out_image != NULL) {
+				 //cv::drawContours(Input_image, contours_poly, i, (0, 0, 255), 2, 8,hierarchy, 0, cv::Point());
+				// Draw a bounding box
+				if (bPrintDebugMsg > OFF) {
+					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
+				}
 
-          if(contour_area > expected_area)
-          {
-        	  if(bPrintDebugMsg > DEBUG)
-        		  std::cout << "accepted sample area: " << contour_area << " "
-						    << "expected_area:  " <<expected_area <<std::endl;
-				// Push the sample
-				detected_samples.push_back(sample);
-
-				if (out_image != NULL) {
-					 //cv::drawContours(Input_image, contours_poly, i, (0, 0, 255), 2, 8,hierarchy, 0, cv::Point());
-					// Draw a bounding box
-					if (bPrintDebugMsg > OFF) {
-						rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
-						DUMP_IMAGE(Input_image,"/tmp/BB.png");
-					}
-
-				} else {
-					if (bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
+		        // Log all the positions
+		        if(bPrintDebugMsg > DEBUG)
+		        {
+					std::cout << "TL: "<<tl.x << " "<< tl.y << std::endl;
+					std::cout << "BR: "<<br.x << " "<< br.y << std::endl;
+					// Pixel coordinates in Image frame
+					std::cout << "pxl_cntr_btm:("<< pxl_cntr_btm.u <<","<< pxl_cntr_btm.v << ")"<<std::endl;
+					std::cout << "pxl_left_btm:("<< pxl_left_btm.u <<","<< pxl_left_btm.v <<")" <<std::endl;
+					std::cout << "pxl_right_btm:("<< pxl_right_btm.u <<","<< pxl_right_btm.v <<")" <<std::endl;
+					std::cout << "pxl_left_tp:("<< pxl_left_tp.u <<","<< pxl_left_tp.v <<")"<<std::endl;
+					std::cout << "pxl_right_tp:("<< pxl_right_tp.u <<" , "<< pxl_right_tp.v <<")" <<std::endl;
+					// Pixel coordinates in World frame
+		        	std::cout << "world_cntr_tp:("<<  world_cntr_tp.x <<","<< world_cntr_tp.y <<")" << std::endl;
+		        	std::cout << "world_left_tp:("<<  world_left_tp.x <<","<< world_left_tp.y <<")" << std::endl;
+		        	std::cout << "world_right_tp:("<<  world_right_tp.x <<"," << world_right_tp.y <<")" << std::endl;
+		        	std::cout << "world_cntr_btm:("<<  world_cntr_btm.x <<","<< world_cntr_btm.y <<")" << std::endl;
+					std::cout << "world_left_btm:("<<  world_left_btm.x <<"," << world_left_btm.y <<")" << std::endl;
+					std::cout << "world_right_btm:( "<<  world_right_btm.x <<"," << world_right_btm.y <<")" << std::endl;
+					// Sample world position
+					std::cout << "sample:(" << sample.x  <<","<< sample.y  <<")" <<std::endl;
+					// Sample width and depth in world
+					std::cout << "sample width:  " << sample.projected_width<< std::endl;
+					std::cout << "sample depth:  " << sample.projected_depth<< std::endl;
+					// Area
+					std::cout << "contour_area: "<<computed_area_in_pixels << std::endl;
 				}
 			} else {
-				if (bPrintDebugMsg > DEBUG) {
-					std::cout << "detected small contour" << std::endl;
-				}
+				if (bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
 			}
 		} else {
 			if (bPrintDebugMsg > DEBUG)
 			{
-				if(sample.projected_width < registered_sample[index].min_width)
+				if(expected_area_in_pixels < registered_sample[index].min_width)
 					std::cout << "detected a small sample" << std::endl;
-				else if(sample.projected_width > registered_sample[index].max_width)
+				else if(expected_area_in_pixels > registered_sample[index].max_width)
 					std::cout << "detected a large sample" << std::endl;
 			}
 		}
@@ -901,17 +913,16 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		return;
 	}
 
-#ifdef ENABLE_RESIZING
+#if ENABLE_RESIZING
 	src_rescaled = *imgPtr;
 	// Reduce input image resolution to speed up processing.
 	cv::resize(src_rescaled,Input_image,cv::Size(810/*RESCALED_ROWS,RESCALED_COLS*/,1440),0,0,cv::INTER_LINEAR);
-#else
-	Input_image = *imgPtr;
-#endif //ENABLE_RESIZING
-
 	// Adjust the camera parameters according to the new image size
 	camera_parameters[camera_index].Hpixels = Input_image.cols;
 	camera_parameters[camera_index].Vpixels = Input_image.rows;
+#else
+	Input_image = *imgPtr;
+#endif //ENABLE_RESIZING
 
 	// Add ROI to the image
 	if(camera_index >= 0 && camera_index < MAX_CAMERAS_SUPPORTED)
@@ -923,6 +934,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		std::cout << "ERROR: Unknown number of camera's registered "<< std::endl;
 		return;
 	}
+
 
 #if (CUDA_GPU)
 	cv::gpu::GpuMat gpu_in, gpu_out;
