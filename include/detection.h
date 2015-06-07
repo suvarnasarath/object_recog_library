@@ -5,9 +5,6 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
-#if (CUDA_GPU)
-#include "opencv2/gpu/gpu.hpp"
-#endif
 #include <iostream>
 #include <vector>
 #include <sys/time.h>
