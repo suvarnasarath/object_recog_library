@@ -346,7 +346,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 
 #if (CUDA_GPU)
 	gpu_in.upload(normalized_image);
-	cv::gpu::subtract(255.0,gpu_in,gpu_out);
+	cv::gpu::subtract(gpu_in, 255.0, gpu_out);
 	gpu_out.download(dst);
 #else
 	cv::subtract(255.0,normalized_image,dst);
