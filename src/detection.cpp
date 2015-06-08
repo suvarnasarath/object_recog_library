@@ -2,17 +2,17 @@
 #include "detection.h"
 #include <time.h>
 
-#define DEBUG_DUMP
-#define USE_GLOBAL_THRESHOLD   (1)
-#define USE_ADAPTIVE_THRESHOLD (!USE_GLOBAL_THRESHOLD)
-#define USE_HSV_SPACE		   (0)
-#define USE_LAB_SPACE		   (!USE_HSV_SPACE)
-#define USE_MORPHOLOGICAL_OPS  (1)
-#define ENABLE_DEPTH_TEST	   (0)
-#define ENABLE_SHAPE_TEST	   (0)
-#define ENABLE_TEXTURE_TEST    (1)
-#define ENABLE_TIMING		   (1)
-#define ENABLE_RESIZING		   (0)
+//#define DEBUG_DUMP
+#define USE_GLOBAL_THRESHOLD  	(1)
+#define USE_ADAPTIVE_THRESHOLD	(!USE_GLOBAL_THRESHOLD)
+#define USE_HSV_SPACE		(0)
+#define USE_LAB_SPACE		(!USE_HSV_SPACE)
+#define USE_MORPHOLOGICAL_OPS 	(1)
+#define ENABLE_DEPTH_TEST	(0)
+#define ENABLE_SHAPE_TEST	(0)
+#define ENABLE_TEXTURE_TEST	(1)
+#define ENABLE_TIMING		(1)
+#define ENABLE_RESIZING		(0)
 
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
@@ -369,8 +369,8 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 #endif
 	DUMP_IMAGE(dst,"/tmp/texture_derivative_out.png");
 
-#if (CUDA_GPU)
-	cv::gpu::boxFilter(gpu_in, gpu_out, CV_8U, cv::Size(39,39));
+#if (CUDA_GPU & 0)
+	cv::gpu::boxFilter(gpu_in, gpu_out,-1, cv::Size(39,39));
 	gpu_out.download(smoothed_image);
 #else
 	cv::medianBlur(dst,smoothed_image,39);
@@ -380,21 +380,14 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	cv::normalize(smoothed_image,normalized_image,1.0,255.0,cv::NORM_MINMAX);
 	DUMP_IMAGE(normalized_image,"/tmp/texture_normalised_out.png");
 
-#if (CUDA_GPU)
-	gpu_in.upload(normalized_image);
-	cv::gpu::subtract(gpu_in, 255.0, gpu_out);
-	gpu_out.download(dst);
-#else
 	cv::subtract(255.0,normalized_image,dst);
-#endif
 
 #if (USE_MORPHOLOGICAL_OPS)
 	#if (CUDA_GPU)
 		gpu_in.upload(dst);
-		cv::gpu::erode(gpu_in, gpu_out, erosion_element);
-		gpu_out.download(erosion_dst);
-		gpu_in.upload(erosion_dst);
-		cv::gpu::dilate(gpu_in, gpu_out, dilation_element);
+		cv::gpu::erode(gpu_in, gpu_in2, erosion_element);
+		cv::gpu::dilate(gpu_in2, gpu_out, dilation_element);
+		gpu_in2.download(erosion_dst);
 		gpu_out.download(dst);
 	#else
 		cv::erode(dst,erosion_dst,erosion_element);
@@ -487,7 +480,9 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 #if (CUDA_GPU)
     cv::gpu::GpuMat gpu_in, gpu_gblur, gpu_div, gpu_out;
 	gpu_in.upload(L_channel);
-	cv::gpu::boxFilter(gpu_in, gpu_out, CV_8U, cv::Size(11,11));
+	cv::gpu::boxFilter(gpu_in, gpu_out, -1, cv::Size(11,11));
+	gpu_out.download(L_median);
+	DUMP_IMAGE(L_median,"/tmp/L_median.png");
 	gpu_out.convertTo(gpu_out, CV_32FC1);
 	gpu_out.download(L_inter);
 #else
@@ -496,14 +491,14 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	L_channel = L_median;
 	L_channel.convertTo(L_inter,CV_32FC1);
 #endif
-
+#if 0
     cv::Mat blurred_heatmap = cv::Mat::zeros(L_inter.rows,L_inter.cols,CV_32FC1);
     cv::Mat dst, heat_map_copy;
 
 #if (CUDA_GPU)
     gpu_in.upload(L_inter);
     // Todo: Need to test this
-    cv::gpu::GaussianBlur(gpu_in, gpu_gblur, cv::Size(31,31),50,0,cv::BORDER_DEFAULT);
+    cv::gpu::GaussianBlur(gpu_in, gpu_gblur, cv::Size(31,31),10,0,cv::BORDER_DEFAULT);
 //    gpu_out.download(blurred_heatmap);
 #else
     // Use the more efficient 1D kernels in sequence instead of the high level GaussianBlur.
@@ -516,11 +511,11 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 #if (CUDA_GPU)
 //    gpu_in.upload(blurred_heatmap);
     cv::gpu::add(gpu_gblur, 1, gpu_out);
-//    gpu_out.download(dst);
+    gpu_out.download(dst);
 #else
     cv::add(1,blurred_heatmap,dst);
-    DUMP_IMAGE(dst,"/tmp/heat_map_blur.png");
 #endif
+    DUMP_IMAGE(dst,"/tmp/heat_map_blur.png");
 
 
 #if (CUDA_GPU)
@@ -537,9 +532,9 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
     gpu_out.download(L_inter);
 #else
     cv::multiply(128,L_inter,L_inter);
+#endif
     DUMP_IMAGE(L_inter,"/tmp/heat_map_division.png");
 #endif
-
 	response = cv::Mat::zeros(L_channel.rows,L_channel.cols,CV_32FC1);
 
 	int L_ref = L_info.origin;
@@ -555,9 +550,9 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	const float a_weighting_factor = a_info.weight;
 	const float b_weighting_factor = b_info.weight;
 
-	const float L_mult_factor = 1.0/static_cast<double>(max_L_dev);
-	const float a_mult_factor = 1.0/static_cast<double>(max_a_dev);
-	const float b_mult_factor = 1.0/static_cast<double>(max_b_dev);
+	const float L_mult_factor = 1.0/static_cast<float>(max_L_dev);
+	const float a_mult_factor = 1.0/static_cast<float>(max_a_dev);
+	const float b_mult_factor = 1.0/static_cast<float>(max_b_dev);
 
 	for(int rows = 0 ;rows < input.rows; rows++)
 	{
@@ -715,7 +710,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 #else
     cv::threshold(heat_map,heat_map,140,255,CV_THRESH_BINARY);
 #endif
-heat_map.convertTo(heat_map, CV_8UC1);
+    heat_map.convertTo(heat_map, CV_8UC1);
 
 #elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
@@ -735,7 +730,7 @@ heat_map.convertTo(heat_map, CV_8UC1);
 		cv::erode(heat_map,erosion_dst,erosion_element);
 		cv::dilate(erosion_dst,heat_map,dilation_element);
 	#endif  // CUDA
-		DUMP_IMAGE(erosion_dst,"/tmp/erosion_out.png");
+	//	DUMP_IMAGE(erosion_dst,"/tmp/erosion_out.png");
 		DUMP_IMAGE(heat_map,"/tmp/dilation_out.png");
 #endif //USE_MORPHOLOGICAL_OPS
 
@@ -949,10 +944,16 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 
 
 #ifdef ENABLE_TEXTURE_TEST
+#if (CUDA_GPU)
+        gpu_in.upload(Input_image);
+        cv::gpu::cvtColor(gpu_in, gpu_out,CV_RGB2GRAY);
+        gpu_out.download(src_gray);
+#else 
 	cv::cvtColor(Input_image,src_gray,CV_RGB2GRAY);
+#endif // CUDA_GPU
 	GetTextureImage(src_gray,texture_out);
 	DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
-#endif
+#endif // ENABLE_TEXTURE_TEST
 	// Clear detected_samples structure before filling in with new data
 	detected_samples.clear();
 
