@@ -2,7 +2,7 @@
 #include "detection.h"
 #include <time.h>
 
-//#define DEBUG_DUMP
+#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD  	(1)
 #define USE_ADAPTIVE_THRESHOLD	(!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		(0)
@@ -12,7 +12,7 @@
 #define ENABLE_SHAPE_TEST	(0)
 #define ENABLE_TEXTURE_TEST	(1)
 #define ENABLE_TIMING		(1)
-#define ENABLE_RESIZING		(0)
+#define ENABLE_RESIZING		(1)
 
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
@@ -614,8 +614,8 @@ void getPixelCount(unsigned int camera_index, double Dist2Sample, double &min_si
 {
 	float min_sample_size_pixels = 0.0;
 	float max_sample_size_pixels = 0.0;
-	double K1 = (1920/1.4);
-	double K2 = (1080/0.7);
+	double K1 =  camera_parameters[camera_index].Hpixels/1.4;//(1920/1.4);
+	double K2 = camera_parameters[camera_index].Vpixels/0.7;//(1080/0.7);
 	double width = 0.0685;   // Sample width in meters
 	double height = 0.0635;  // Sample height in meters
 
@@ -839,6 +839,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 				// Draw a bounding box
 				if (bPrintDebugMsg > OFF) {
 					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
+					DUMP_IMAGE(Input_image,"/tmp/BB.png");
+					//cv::waitKey(400);
 				}
 
 		        // Log all the positions
@@ -911,10 +913,10 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 #if ENABLE_RESIZING
 	src_rescaled = *imgPtr;
 	// Reduce input image resolution to speed up processing.
-	cv::resize(src_rescaled,Input_image,cv::Size(810/*RESCALED_ROWS,RESCALED_COLS*/,1440),0,0,cv::INTER_LINEAR);
+	cv::resize(src_rescaled,Input_image,cv::Size(camera_parameters[camera_index].Vpixels,camera_parameters[camera_index].Hpixels),0,0,cv::INTER_LINEAR);
 	// Adjust the camera parameters according to the new image size
-	camera_parameters[camera_index].Hpixels = Input_image.cols;
-	camera_parameters[camera_index].Vpixels = Input_image.rows;
+	//camera_parameters[camera_index].Hpixels = Input_image.cols;
+	//camera_parameters[camera_index].Vpixels = Input_image.rows;
 #else
 	Input_image = *imgPtr;
 #endif //ENABLE_RESIZING

@@ -54,8 +54,8 @@ int main(int argc, char **argv)
 	param.pitch = 0.593411945678072;//0.366;      // Pitch angle of the camera (up from down)
 	param.HFov = 1.3962634;   // Horizontal field of view
 	param.VFov = 0.7853981625;// Vertical field of view
-	param.Hpixels = 1920; //960;
-	param.Vpixels = 1080; //720;
+	param.Hpixels = 960; //1920;
+	param.Vpixels = 720; //1080;
 	param.max_detection_dist = 100.0;
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
