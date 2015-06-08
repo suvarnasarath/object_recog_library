@@ -710,7 +710,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 #else
     cv::threshold(heat_map,heat_map,140,255,CV_THRESH_BINARY);
 #endif
-heat_map.convertTo(heat_map, CV_8UC1);
+    heat_map.convertTo(heat_map, CV_8UC1);
 
 #elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
@@ -944,10 +944,16 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 
 
 #ifdef ENABLE_TEXTURE_TEST
+#if (CUDA_GPU)
+        gpu_in.upload(Input_image);
+        cv::gpu::cvtColor(gpu_in, gpu_out,CV_RGB2GRAY);
+        gpu_out.download(src_gray);
+#else 
 	cv::cvtColor(Input_image,src_gray,CV_RGB2GRAY);
+#endif // CUDA_GPU
 	GetTextureImage(src_gray,texture_out);
 	DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
-#endif
+#endif // ENABLE_TEXTURE_TEST
 	// Clear detected_samples structure before filling in with new data
 	detected_samples.clear();
 
