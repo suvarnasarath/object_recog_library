@@ -12,7 +12,7 @@
 #define ENABLE_SHAPE_TEST	(0)
 #define ENABLE_TEXTURE_TEST	(1)
 #define ENABLE_TIMING		(1)
-#define ENABLE_RESIZING		(1)
+#define ENABLE_RESIZING		(0)
 
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
@@ -491,18 +491,18 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	L_channel = L_median;
 	L_channel.convertTo(L_inter,CV_32FC1);
 #endif
+
 #if 0
-    cv::Mat blurred_heatmap = cv::Mat::zeros(L_inter.rows,L_inter.cols,CV_32FC1);
+    cv::Mat L_blurred = cv::Mat::zeros(L_inter.rows,L_inter.cols,CV_32FC1);
     cv::Mat dst, heat_map_copy;
 
 #if (CUDA_GPU)
     gpu_in.upload(L_inter);
-    // Todo: Need to test this
     cv::gpu::GaussianBlur(gpu_in, gpu_gblur, cv::Size(31,31),10,0,cv::BORDER_DEFAULT);
 //    gpu_out.download(blurred_heatmap);
 #else
     // Use the more efficient 1D kernels in sequence instead of the high level GaussianBlur.
-    cv::GaussianBlur(L_inter,blurred_heatmap,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
+    cv::GaussianBlur(L_inter,L_blurred,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
     //cv::boxFilter(L_inter,blurred_heatmap,-1,cv::Size(159,159));
     //cv::sepFilter2D(L_inter,blurred_heatmap,CV_32F,GKernelX,GKernelY);
 #endif
@@ -513,9 +513,9 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
     cv::gpu::add(gpu_gblur, 1, gpu_out);
     gpu_out.download(dst);
 #else
-    cv::add(1,blurred_heatmap,dst);
+    cv::add(1,L_blurred,dst);
 #endif
-    DUMP_IMAGE(dst,"/tmp/heat_map_blur.png");
+    DUMP_IMAGE(dst,"/tmp/L_blur.png");
 
 
 #if (CUDA_GPU)
@@ -533,11 +533,14 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 #else
     cv::multiply(128,L_inter,L_inter);
 #endif
-    DUMP_IMAGE(L_inter,"/tmp/heat_map_division.png");
+    DUMP_IMAGE(L_inter,"/tmp/L_division.png");
+    L_channel = L_inter;
 #endif
+
+
 	response = cv::Mat::zeros(L_channel.rows,L_channel.cols,CV_32FC1);
 
-	int L_ref = L_info.origin;
+	int32_t L_ref = L_info.origin;
 	int32_t a_ref = a_info.origin;
 	int32_t b_ref = b_info.origin;
 
@@ -558,7 +561,7 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	{
 		for(int cols =0; cols < input.cols; cols++)
 		{
-			uint8_t L = static_cast<int32_t>(L_channel.at<uint8_t>(rows,cols));
+			int32_t L = static_cast<int32_t>(L_channel.at<uint8_t>(rows,cols));
 			int32_t a = static_cast<int32_t>(a_channel.at<uint8_t>(rows,cols));
 			int32_t b = static_cast<int32_t>(b_channel.at<uint8_t>(rows,cols));
 
@@ -614,17 +617,17 @@ void getPixelCount(unsigned int camera_index, double Dist2Sample, double &min_si
 {
 	float min_sample_size_pixels = 0.0;
 	float max_sample_size_pixels = 0.0;
-	double K1 =  camera_parameters[camera_index].Hpixels/1.4;//(1920/1.4);
-	double K2 = camera_parameters[camera_index].Vpixels/0.7;//(1080/0.7);
+	double K1 =  camera_parameters[camera_index].Hpixels/1.4;
+	double K2 = camera_parameters[camera_index].Vpixels/0.7;
 	double width = 0.0685;   // Sample width in meters
 	double height = 0.0635;  // Sample height in meters
 
-	double thresh = 0.03;
+	double thresh = 0.01;
 
-	double min_width = width - thresh;
-	double max_width = width + thresh;
+	double min_width = width - thresh ;
+	double max_width = width + thresh + 0.06;
 	double min_height = height - thresh;
-	double max_height = height + thresh;
+	double max_height = height + thresh + 0.03;
 
 	double min_width_angle = std::atan(min_width/(2*Dist2Sample));
 	double max_width_angle = std::atan(max_width/(2*Dist2Sample));
@@ -635,7 +638,7 @@ void getPixelCount(unsigned int camera_index, double Dist2Sample, double &min_si
 	min_size = 4*K1*K2 * min_width_angle * min_height_angle ;//PixelsX*PixelsY;
 	max_size = 4*K1*K2 * max_width_angle * max_height_angle ;//PixelsX*PixelsY;
 
-	if (bPrintDebugMsg > OFF & 0)
+	if (bPrintDebugMsg > OFF)
 	{
 		std::cout << "K1: " << K1 << std::endl;
 		std::cout << "K2: " << K2 << std::endl;
@@ -810,9 +813,10 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         dist = std::max(std::sqrt(sample.x*sample.x + sample.y*sample.y +
         		 	 	 	 	  camera_parameters[camera_index].height*camera_parameters[camera_index].height),0.5);
 
-        if(dist > 3.5 || dist < 0.5)
+        if(dist > 4.0 || dist < 0.5)
         {
         	continue;
+        	std::cout << "Too far or too close"<< std::endl;
         }
         // Compute sample size
        	getPixelCount(camera_index, dist,min_expected_size,max_expected_size);
@@ -840,7 +844,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 				if (bPrintDebugMsg > OFF) {
 					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
 					DUMP_IMAGE(Input_image,"/tmp/BB.png");
-					//cv::waitKey(400);
 				}
 
 		        // Log all the positions
@@ -888,10 +891,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     return true;
 }
 
-#define SCALE	(3/4)
-#define RESCALED_ROWS (1080*SCALE)
-#define RESCALED_COLS (1920*SCALE)
-
 void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
 #ifdef ENABLE_TIMING
@@ -913,7 +912,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 #if ENABLE_RESIZING
 	src_rescaled = *imgPtr;
 	// Reduce input image resolution to speed up processing.
-	cv::resize(src_rescaled,Input_image,cv::Size(camera_parameters[camera_index].Vpixels,camera_parameters[camera_index].Hpixels),0,0,cv::INTER_LINEAR);
+	cv::resize(src_rescaled,Input_image,cv::Size(camera_parameters[camera_index].Hpixels,camera_parameters[camera_index].Vpixels),0,0,cv::INTER_LINEAR);
 	// Adjust the camera parameters according to the new image size
 	//camera_parameters[camera_index].Hpixels = Input_image.cols;
 	//camera_parameters[camera_index].Vpixels = Input_image.rows;
