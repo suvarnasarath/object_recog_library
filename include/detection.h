@@ -19,6 +19,14 @@
 
 typedef enum
 {
+	WHITE = 1,
+	RED   = 2,
+	ORANGE= 3,
+	YELLOW= 4
+}SAMPLE_COLOR;
+
+typedef enum
+{
 	OFF,
 	ERROR,
 	DEBUG,
@@ -67,12 +75,11 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 									  const std::vector<double>&val_param,
 									  const std::vector<double>width,
 									  const std::vector<double>depth,
-									  std::vector<double>&moments,
-									  double pixel_dist_factor);
+									  std::vector<double>&moments);
 
 void register_camera(unsigned int camera_id, const platform_camera_parameters * param);
 int  get_registered_sample_size();
-void set_sample_filter(const std::vector<unsigned int> &filter);
+void set_sample_filter(const std::vector<bool> &filter);
 void set_debug(LOGLEVEL level );
 bool compare_HuMoments(const std::vector<double> &GroundtruthHuMoments, const double *ComputedHuMoments);
 

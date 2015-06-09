@@ -45,7 +45,13 @@ void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S
 int main(int argc, char **argv)
 {
 	// Turn off debug messages.
-	set_debug(VERBOSE);
+	set_debug(OFF);
+
+	// Enable samples: Only white sample is enabled by default
+	//std::vector<bool> filter{true,true,false,false};
+	//set_sample_filter(filter);
+
+
 	/*******************************/
 	/******** Register camera ******/
 	/*******************************/
@@ -56,7 +62,7 @@ int main(int argc, char **argv)
 	param.VFov = 0.7853981625;// Vertical field of view
 	param.Hpixels = 960; //1920;
 	param.Vpixels = 720; //1080;
-	param.max_detection_dist = 100.0;
+	param.max_detection_dist = 5.0;
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
 	param.yaw = 0;
@@ -66,16 +72,6 @@ int main(int argc, char **argv)
 	/********************************/
 	/******** Register samples ******/
 	/********************************/
-#ifdef USE_HSV
-	// White sample
-	std::vector<double>Hue{100,10,0.30};
-	std::vector<double>Sat{20,10,0.0};
-	std::vector<double>Val{230,25,0.70};
-	std::vector<double>width{0.05,0.3};
-	std::vector<double>depth{0.05,0.3};
-	register_sample(1,Hue,Sat,Val,width,depth);
-#else
-
 	std::vector<double>moments{ 0.234046,
 								0.015061,
 								0.00422825,
@@ -84,19 +80,7 @@ int main(int argc, char **argv)
 								0.00058314,
 								-7.57831e-07};
 
-#ifndef SIMULATOR
-	/*
-	 * White
-	 */
-	std::vector<double>L{200,55,0.6};
-	std::vector<double>a{128,20,0.1};
-	std::vector<double>b{128,30,0.3};
-	std::vector<double>width{1000.0,7000.0};
-	std::vector<double>depth{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_white = 8000;
-	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
-
-#else
+#ifdef SIMULATOR  // Gazebo has some weirdness that I still needs to be figure.
 	/*
 	 * White
 	 */
@@ -108,17 +92,26 @@ int main(int argc, char **argv)
 
 	double pixel_dist_factor_white = 6000;
 	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
-#endif
+#else
+	/*
+	 * White
+	 */
+	std::vector<double>L{200,55,0.6};			 //{Origin,Deviation,Weight}
+	std::vector<double>a{128,20,0.1};			 //{Origin,Deviation,Weight}
+	std::vector<double>b{128,30,0.3};			 //{Origin,Deviation,Weight}
+	std::vector<double>width{0.0685,0.01, 0.06}; //{width,min,max}
+	std::vector<double>depth{0.0635,0,01, 0.03}; //{height,min,max}
+	register_sample(WHITE,L,a,b,width,depth,moments);
+
 	/*
 	 * Red
-	 *
+	 */
 	std::vector<double>L_red{163,40,0.2};
 	std::vector<double>a_red{200,40,0.55};
 	std::vector<double>b_red{128,10,0.25};
-	std::vector<double>width_red{0.02,0.25};
-	std::vector<double>depth_red{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_red = 600;
-	register_sample(2,L_red,a_red,b_red,width_red,depth_red,moments,pixel_dist_factor_red);
+	std::vector<double>width_red{0.0285,0.01,0.09};
+	std::vector<double>depth_red{0.0235,0.02,0.03};
+	register_sample(RED,L_red,a_red,b_red,width_red,depth_red,moments);
 
 	/*
 	 * Yellow
@@ -128,8 +121,7 @@ int main(int argc, char **argv)
 	std::vector<double>b_yellow{180,10,0.33};
 	std::vector<double>width_yellow{0.02,0.3};
 	std::vector<double>depth_yellow{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_yellow = 60;
-	register_sample(3,L_yellow,a_yellow,b_yellow,width_yellow,depth_yellow,moments,pixel_dist_factor_yellow);
+	register_sample(3,L_yellow,a_yellow,b_yellow,width_yellow,depth_yellow,moments);
 
 	/*
 	 * Orange
@@ -143,7 +135,6 @@ int main(int argc, char **argv)
 	register_sample(4,L_orange,a_orange,b_orange,width_orange,depth_orange,moments,pixel_dist_factor_orange);
 */
 #endif
-
 	/********************************/
 	/********* Ros node handle ******/
 	/********************************/

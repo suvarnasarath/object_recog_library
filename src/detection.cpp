@@ -2,7 +2,7 @@
 #include "detection.h"
 #include <time.h>
 
-#define DEBUG_DUMP
+//#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD  	(1)
 #define USE_ADAPTIVE_THRESHOLD	(!USE_GLOBAL_THRESHOLD)
 #define USE_HSV_SPACE		(0)
@@ -83,6 +83,12 @@ typedef struct
 	double weight;
 }channel_info;
 
+typedef struct
+{
+
+
+}sample_info;
+
 /*
  * Definition of input sample
  * @ id : Id of the sample
@@ -97,12 +103,13 @@ typedef struct
 	channel_info channel1;
 	channel_info channel2;
 	channel_info channel3;
+	double width;
 	double min_width;
 	double max_width;
+	double depth;
 	double min_depth;
 	double max_depth;
 	bool isValid;  // Should we check for this sample in out detector
-	double pixel_dist_factor;
 	std::vector<double>moments;
 }REGISTERED_SAMPLE;
 
@@ -244,8 +251,7 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 									  const std::vector<double>&val_param,
 									  const std::vector<double>width,
 									  const std::vector<double>depth,
-									  std::vector<double>&moments,
-									  double pixel_dist_factor)
+									  std::vector<double>&moments)
 {
 		REGISTERED_SAMPLE new_sample;
 		new_sample.Id = Id;
@@ -261,13 +267,16 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 		new_sample.channel3.deviation = val_param[1]+0.5;
 		new_sample.channel3.weight = val_param[2];
 
-		new_sample.min_width = width[0];
-		new_sample.max_width = width[1];
+		new_sample.width = width[0];
+		new_sample.min_width = width[1];
+		new_sample.max_width = width[2];
 
-		new_sample.min_depth = depth[0];
-		new_sample.max_depth = depth[1];
+		new_sample.depth = depth[0];
+		new_sample.min_depth = depth[1];
+		new_sample.max_depth = depth[2];
+
 		new_sample.isValid = true; // true by default for all samples
-		new_sample.pixel_dist_factor = pixel_dist_factor;
+		//new_sample.pixel_dist_factor = pixel_dist_factor;
 
 		new_sample.moments = log_transform(moments);
 
@@ -297,9 +306,12 @@ int get_registered_sample_size()
 	return registered_sample.size();
 }
 
-void set_sample_filter(const std::vector<unsigned int> &filter)
+void set_sample_filter(const std::vector<bool> &filter)
 {
-	// Todo: implement filter to valid samples
+	for(int i=0;i< registered_sample.size(); ++i)
+	{
+		registered_sample[i].isValid = filter[i];
+	}
 }
 
 
@@ -492,7 +504,7 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	L_channel.convertTo(L_inter,CV_32FC1);
 #endif
 
-#if 0
+#if NEVER_USED
     cv::Mat L_blurred = cv::Mat::zeros(L_inter.rows,L_inter.cols,CV_32FC1);
     cv::Mat dst, heat_map_copy;
 
@@ -613,21 +625,19 @@ bool compare_HuMoments(const std::vector<double> &GroundtruthHuMoments, const do
 	return true;
 }
 
-void getPixelCount(unsigned int camera_index, double Dist2Sample, double &min_size, double &max_size)
+void getPixelCount(unsigned int camera_index, unsigned int sample_index, double Dist2Sample, double &min_size, double &max_size)
 {
-	float min_sample_size_pixels = 0.0;
-	float max_sample_size_pixels = 0.0;
+	float min_sample_size_pixels,max_sample_size_pixels;
 	double K1 =  camera_parameters[camera_index].Hpixels/1.4;
 	double K2 = camera_parameters[camera_index].Vpixels/0.7;
-	double width = 0.0685;   // Sample width in meters
-	double height = 0.0635;  // Sample height in meters
 
-	double thresh = 0.01;
+	double width = registered_sample[sample_index].width;
+	double height = registered_sample[sample_index].width;
 
-	double min_width = width - thresh ;
-	double max_width = width + thresh + 0.06;
-	double min_height = height - thresh;
-	double max_height = height + thresh + 0.03;
+	double min_width = width - registered_sample[sample_index].min_width;
+	double max_width = width + registered_sample[sample_index].max_width;
+	double min_height = height - registered_sample[sample_index].min_depth;
+	double max_height = height + registered_sample[sample_index].max_depth;
 
 	double min_width_angle = std::atan(min_width/(2*Dist2Sample));
 	double max_width_angle = std::atan(max_width/(2*Dist2Sample));
@@ -635,8 +645,8 @@ void getPixelCount(unsigned int camera_index, double Dist2Sample, double &min_si
 	double min_height_angle = std::atan(min_height/(2*Dist2Sample));
 	double max_height_angle = std::atan(max_height/(2*Dist2Sample));
 
-	min_size = 4*K1*K2 * min_width_angle * min_height_angle ;//PixelsX*PixelsY;
-	max_size = 4*K1*K2 * max_width_angle * max_height_angle ;//PixelsX*PixelsY;
+	min_size = 4*K1*K2 * min_width_angle * min_height_angle ;
+	max_size = 4*K1*K2 * max_width_angle * max_height_angle ;
 
 	if (bPrintDebugMsg > OFF)
 	{
@@ -654,6 +664,8 @@ void getPixelCount(unsigned int camera_index, double Dist2Sample, double &min_si
 		std::cout << "max_sample_size_pixels: " << max_sample_size_pixels << std::endl;
 	}
 }
+
+std::vector<cv::Rect> BB_Points;
 
 bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image,
 				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,cv::Mat texture_image,
@@ -693,14 +705,16 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     if(texture_image.data)
     {
 #if (CUDA_GPU)
-	gpu_in.upload(texture_image);
-	gpu_in2.upload(heat_map);
-	gpu_in.convertTo(gpu_in, CV_32FC1);
-	gpu_in2.convertTo(gpu_in2, CV_32FC1);
-	cv::gpu::multiply(gpu_in, gpu_in2, gpu_out, 1/255.0,CV_32FC1);
-	gpu_out.download(heat_map);
+		gpu_in.upload(texture_image);
+		gpu_in2.upload(heat_map);
+		gpu_in.convertTo(gpu_in, CV_32FC1);
+		gpu_in2.convertTo(gpu_in2, CV_32FC1);
+		cv::gpu::multiply(gpu_in, gpu_in2, gpu_out, 1/255.0,CV_32FC1);
+		gpu_out.download(heat_map);
 #else
-    	cv::multiply(texture_image,heat_map,heat_map,1/255.0,CV_32FC1);
+		if(registered_sample[index].Id == WHITE) {
+			cv::multiply(texture_image,heat_map,heat_map,1/255.0,CV_32FC1);
+		}
 #endif
     }
     DUMP_IMAGE(heat_map,"/tmp/heat_map_mul.png");
@@ -733,8 +747,9 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		cv::erode(heat_map,erosion_dst,erosion_element);
 		cv::dilate(erosion_dst,heat_map,dilation_element);
 	#endif  // CUDA
-	//	DUMP_IMAGE(erosion_dst,"/tmp/erosion_out.png");
+		//DUMP_IMAGE(erosion_dst,"/tmp/erosion_out.png"); // No GPU download
 		DUMP_IMAGE(heat_map,"/tmp/dilation_out.png");
+
 #endif //USE_MORPHOLOGICAL_OPS
 
     // Find contours in the thresholded image to determine shapes
@@ -815,17 +830,13 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         if(dist > 4.0 || dist < 0.5)
         {
+        	if (bPrintDebugMsg > DEBUG)
+        	       std::cout << "Too far or too close"<< std::endl;
         	continue;
-        	std::cout << "Too far or too close"<< std::endl;
         }
         // Compute sample size
-       	getPixelCount(camera_index, dist,min_expected_size,max_expected_size);
+       	getPixelCount(camera_index, index,dist,min_expected_size,max_expected_size);
        	computed_area_in_pixels = cv::contourArea(contours[i]);
-       	if (bPrintDebugMsg > OFF) {
-			std::cout << "min_expected_area_in_pixels: "<<min_expected_size << std::endl;
-			std::cout << "max_expected_area_in_pixels: "<<max_expected_size <<std::endl;
-			std::cout << "computed_area_in_pixels: "<<computed_area_in_pixels << std::endl;
-       	}
 
         if((computed_area_in_pixels > min_expected_size) && (computed_area_in_pixels < max_expected_size)
 #if ENABLE_DEPTH_TEST
@@ -839,12 +850,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 			detected_samples.push_back(sample);
 
 			if (out_image != NULL) {
-				 //cv::drawContours(Input_image, contours_poly, i, (0, 0, 255), 2, 8,hierarchy, 0, cv::Point());
-				// Draw a bounding box
-				if (bPrintDebugMsg > OFF) {
-					rectangle(Input_image, boundRect[i].tl(), boundRect[i].br(),(0, 0, 255), 2, 8, 0);
-					DUMP_IMAGE(Input_image,"/tmp/BB.png");
-				}
+				// store bounding boxes to draw later
+				BB_Points.push_back(boundRect[i]);
 
 		        // Log all the positions
 		        if(bPrintDebugMsg > DEBUG)
@@ -870,10 +877,12 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 					std::cout << "sample width:  " << sample.projected_width<< std::endl;
 					std::cout << "sample depth:  " << sample.projected_depth<< std::endl;
 					// Area
-					std::cout << "contour_area: "<<computed_area_in_pixels << std::endl;
+					std::cout << "min_expected_area_in_pixels: "<<min_expected_size << std::endl;
+					std::cout << "max_expected_area_in_pixels: "<<max_expected_size <<std::endl;
+					std::cout << "computed_area_in_pixels: "<<computed_area_in_pixels << std::endl;
 				}
 			} else {
-				if (bPrintDebugMsg > OFF)std::cout << "img ptr null" << std::endl;
+				if (bPrintDebugMsg > OFF)std::cout << "Invalid output image pointer" << std::endl;
 			}
 		} else {
 			if (bPrintDebugMsg > DEBUG)
@@ -913,9 +922,6 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	src_rescaled = *imgPtr;
 	// Reduce input image resolution to speed up processing.
 	cv::resize(src_rescaled,Input_image,cv::Size(camera_parameters[camera_index].Hpixels,camera_parameters[camera_index].Vpixels),0,0,cv::INTER_LINEAR);
-	// Adjust the camera parameters according to the new image size
-	//camera_parameters[camera_index].Hpixels = Input_image.cols;
-	//camera_parameters[camera_index].Vpixels = Input_image.rows;
 #else
 	Input_image = *imgPtr;
 #endif //ENABLE_RESIZING
@@ -955,6 +961,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	GetTextureImage(src_gray,texture_out);
 	DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
 #endif // ENABLE_TEXTURE_TEST
+
 	// Clear detected_samples structure before filling in with new data
 	detected_samples.clear();
 
@@ -984,6 +991,18 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		  process_image(camera_index,lab_image, out_image,index,detected_samples,texture_out,image_planes);
 		}
 	}
+
+	// draw bounding boxes on the input image
+	for (int index = 0; index < BB_Points.size(); ++index)
+	{
+		rectangle(Input_image, BB_Points[index].tl(), BB_Points[index].br(),(0, 0, 255), 2, 8, 0);
+	}
+
+	// Clear the samples for next iteration
+	BB_Points.clear();
+	// Log image
+	DUMP_IMAGE(Input_image,"/tmp/BB.png");
+
 #ifdef ENABLE_TIMING
 	clock_t stop_s=clock();  // end
 	Display_time((stop_s - start_s)/CLOCKS_PER_MS);
