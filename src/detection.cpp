@@ -14,7 +14,7 @@
 #define ENABLE_TEXTURE_TEST	(1)
 #define ENABLE_TIMING		(1)
 #define ENABLE_RESIZING		(0)
-#define USE_THREADS  (0)
+#define USE_THREADS  (1)
 
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
