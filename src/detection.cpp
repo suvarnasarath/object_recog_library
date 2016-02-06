@@ -1,6 +1,7 @@
 #include <math.h>
 #include "detection.h"
 #include <time.h>
+#include <pthread.h>
 
 //#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD  	(1)
@@ -110,7 +111,6 @@ typedef struct
 	double min_depth;
 	double max_depth;
 	bool isValid;  // Should we check for this sample in out detector
-	std::vector<double>moments;
 }REGISTERED_SAMPLE;
 
 std::vector<REGISTERED_SAMPLE> registered_sample;
@@ -250,8 +250,7 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 									  const std::vector<double>&sat_param,
 									  const std::vector<double>&val_param,
 									  const std::vector<double>width,
-									  const std::vector<double>depth,
-									  std::vector<double>&moments)
+									  const std::vector<double>depth)
 {
 		REGISTERED_SAMPLE new_sample;
 		new_sample.Id = Id;
@@ -276,9 +275,6 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 		new_sample.max_depth = depth[2];
 
 		new_sample.isValid = true; // true by default for all samples
-		//new_sample.pixel_dist_factor = pixel_dist_factor;
-
-		new_sample.moments = log_transform(moments);
 
 		registered_sample.push_back(new_sample);
 		if(bPrintDebugMsg > ERROR) std::cout<<"added new sample Id = " << Id << std::endl;
@@ -410,6 +406,46 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 #endif //USE_MORPHOLOGICAL_OPS
 }
 
+
+cv::Mat src,texture_out;
+bool thread_state;
+
+#if 0
+void *GetTextureImageThread(void * gray)
+{
+	thread_state = false;
+	/// Generate grad_x and grad_y
+	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
+	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
+
+	int scale = 1;
+	int delta = 0;
+	int ddepth = -1;
+	int kern = 7;
+
+	/// Gradient X
+	cv::Sobel( src, grad_x, ddepth, 1, 0, kern, scale, delta, cv::BORDER_DEFAULT );
+	cv::convertScaleAbs( grad_x, abs_grad_x );
+
+	/// Gradient Y
+	cv::Sobel( src, grad_y, ddepth, 0, 1, kern, scale, delta, cv::BORDER_DEFAULT );
+	cv::convertScaleAbs( grad_y, abs_grad_y );
+
+	/// Total Gradient (approximate)
+	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, texture_out );
+
+	cv::medianBlur(texture_out,smoothed_image,39);
+
+	cv::normalize(smoothed_image,normalized_image,1.0,255.0,cv::NORM_MINMAX);
+
+	cv::subtract(255.0,normalized_image,texture_out);
+
+	cv::erode(texture_out,erosion_dst,erosion_element);
+	cv::dilate(erosion_dst,texture_out,dilation_element);
+
+	thread_state = true;
+}
+#endif
 
 void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
 									   const channel_info & sat,
@@ -648,7 +684,7 @@ void getPixelCount(unsigned int camera_index, unsigned int sample_index, double 
 	min_size = 4*K1*K2 * min_width_angle * min_height_angle ;
 	max_size = 4*K1*K2 * max_width_angle * max_height_angle ;
 
-	if (bPrintDebugMsg > OFF)
+	if (bPrintDebugMsg > ERROR)
 	{
 		std::cout << "K1: " << K1 << std::endl;
 		std::cout << "K2: " << K2 << std::endl;
@@ -668,7 +704,7 @@ void getPixelCount(unsigned int camera_index, unsigned int sample_index, double 
 std::vector<cv::Rect> BB_Points;
 
 bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image,
-				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,cv::Mat texture_image,
+				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,
 				   std::vector<cv::Mat> &image_planes)
 {    
 	DETECTED_SAMPLE sample;
@@ -702,7 +738,9 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     DUMP_IMAGE(heat_map,"/tmp/heat_map.png");
 
-    if(texture_image.data)
+    // Check if texture thread is done
+
+    if(texture_out.data)
     {
 #if (CUDA_GPU)
 		gpu_in.upload(texture_image);
@@ -713,7 +751,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		gpu_out.download(heat_map);
 #else
 		if(registered_sample[index].Id == WHITE) {
-			cv::multiply(texture_image,heat_map,heat_map,1/255.0,CV_32FC1);
+			cv::multiply(texture_out,heat_map,heat_map,1/255.0,CV_32FC1);
 		}
 #endif
     }
@@ -902,17 +940,21 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
 void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
+
+	cv::setNumThreads(16);
+
 #ifdef ENABLE_TIMING
 	// Get clock
 	clock_t start_s=clock();
 #endif
+
 	if(!bInit)
 	{
 		Initialize_lib();
 		bInit = true;
 	}
 
-	cv::Mat lab_image,src_gray,texture_out,src_rescaled;
+	cv::Mat lab_image,src_gray,src_rescaled;
 	if(! imgPtr->data) {
 		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
@@ -958,8 +1000,15 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 #else 
 	cv::cvtColor(Input_image,src_gray,CV_RGB2GRAY);
 #endif // CUDA_GPU
+
+#if 0
+	// Create thread
+	pthread_t texture_thread;
+	pthread_create(&texture_thread,NULL,&GetTextureImageThread,&src_gray);
+#endif
 	GetTextureImage(src_gray,texture_out);
-	DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
+
+	//DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
 #endif // ENABLE_TEXTURE_TEST
 
 	// Clear detected_samples structure before filling in with new data
@@ -988,9 +1037,11 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	{
 		if(registered_sample[index].isValid)
 		{
-		  process_image(camera_index,lab_image, out_image,index,detected_samples,texture_out,image_planes);
+		  process_image(camera_index,lab_image, out_image,index,detected_samples,image_planes);
 		}
 	}
+
+	//pthread_join(texture_thread,NULL);
 
 	// draw bounding boxes on the input image
 	for (int index = 0; index < BB_Points.size(); ++index)
@@ -1003,6 +1054,8 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	// Log image
 	DUMP_IMAGE(Input_image,"/tmp/BB.png");
 
+	std::cout << "num threads: "<<cv::getNumThreads() << std::endl;
+	std::cout << "num cpu's: "<<cv::getNumberOfCPUs()<<std::endl;
 #ifdef ENABLE_TIMING
 	clock_t stop_s=clock();  // end
 	Display_time((stop_s - start_s)/CLOCKS_PER_MS);

@@ -74,8 +74,7 @@ void register_sample(unsigned int Id, const std::vector<double>&hue_param,
 									  const std::vector<double>&sat_param,
 									  const std::vector<double>&val_param,
 									  const std::vector<double>width,
-									  const std::vector<double>depth,
-									  std::vector<double>&moments);
+									  const std::vector<double>depth);
 
 void register_camera(unsigned int camera_id, const platform_camera_parameters * param);
 int  get_registered_sample_size();

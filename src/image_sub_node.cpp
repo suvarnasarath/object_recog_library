@@ -91,7 +91,7 @@ int main(int argc, char **argv)
 	std::vector<double>depth{0.05,4.6};
 
 	double pixel_dist_factor_white = 6000;
-	register_sample(1,L,a,b,width,depth,moments,pixel_dist_factor_white);
+	register_sample(1,L,a,b,width,depth);
 #else
 	/*
 	 * White
@@ -100,19 +100,19 @@ int main(int argc, char **argv)
 	std::vector<double>a{128,20,0.1};			 //{Origin,Deviation,Weight}
 	std::vector<double>b{128,30,0.3};			 //{Origin,Deviation,Weight}
 	std::vector<double>width{0.0685,0.01, 0.06}; //{width,min,max}
-	std::vector<double>depth{0.0635,0,01, 0.03}; //{height,min,max}
-	register_sample(WHITE,L,a,b,width,depth,moments);
+	std::vector<double>depth{0.0635,0.01, 0.03}; //{height,min,max}
+	register_sample(WHITE,L,a,b,width,depth);
 
 	/*
 	 * Red
-	 */
+
 	std::vector<double>L_red{163,40,0.2};
 	std::vector<double>a_red{200,40,0.55};
 	std::vector<double>b_red{128,10,0.25};
 	std::vector<double>width_red{0.0285,0.01,0.09};
 	std::vector<double>depth_red{0.0235,0.02,0.03};
-	register_sample(RED,L_red,a_red,b_red,width_red,depth_red,moments);
-
+	register_sample(RED,L_red,a_red,b_red,width_red,depth_red);
+*/
 	/*
 	 * Yellow
 	 *
@@ -121,7 +121,7 @@ int main(int argc, char **argv)
 	std::vector<double>b_yellow{180,10,0.33};
 	std::vector<double>width_yellow{0.02,0.3};
 	std::vector<double>depth_yellow{MIN_DEPTH,MAX_DEPTH};
-	register_sample(3,L_yellow,a_yellow,b_yellow,width_yellow,depth_yellow,moments);
+	register_sample(3,L_yellow,a_yellow,b_yellow,width_yellow,depth_yellow);
 
 	/*
 	 * Orange
@@ -132,7 +132,7 @@ int main(int argc, char **argv)
 	std::vector<double>width_orange{0.02,0.3};
 	std::vector<double>depth_orange{MIN_DEPTH,MAX_DEPTH};
 	double pixel_dist_factor_orange = 6000;
-	register_sample(4,L_orange,a_orange,b_orange,width_orange,depth_orange,moments,pixel_dist_factor_orange);
+	register_sample(4,L_orange,a_orange,b_orange,width_orange,depth_orange);
 */
 #endif
 	/********************************/
