@@ -14,6 +14,7 @@
 #define ENABLE_TEXTURE_TEST	(1)
 #define ENABLE_TIMING		(1)
 #define ENABLE_RESIZING		(0)
+#define USE_THREADS  (0)
 
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
@@ -410,7 +411,7 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 cv::Mat src,texture_out;
 bool thread_state;
 
-#if 0
+#if( USE_THREADS)
 void *GetTextureImageThread(void * gray)
 {
 	thread_state = false;
@@ -940,9 +941,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
 void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_image,std::vector<DETECTED_SAMPLE> &detected_samples)
 {
-
-	cv::setNumThreads(16);
-
 #ifdef ENABLE_TIMING
 	// Get clock
 	clock_t start_s=clock();
@@ -1001,14 +999,14 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	cv::cvtColor(Input_image,src_gray,CV_RGB2GRAY);
 #endif // CUDA_GPU
 
-#if 0
+#if (USE_THREADS)
 	// Create thread
 	pthread_t texture_thread;
 	pthread_create(&texture_thread,NULL,&GetTextureImageThread,&src_gray);
-#endif
+#else
 	GetTextureImage(src_gray,texture_out);
-
-	//DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
+#endif
+	DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
 #endif // ENABLE_TEXTURE_TEST
 
 	// Clear detected_samples structure before filling in with new data
@@ -1041,8 +1039,9 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		}
 	}
 
-	//pthread_join(texture_thread,NULL);
-
+#if (USE_THREADS)
+	pthread_join(texture_thread,NULL);
+#endif
 	// draw bounding boxes on the input image
 	for (int index = 0; index < BB_Points.size(); ++index)
 	{
@@ -1054,8 +1053,8 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	// Log image
 	DUMP_IMAGE(Input_image,"/tmp/BB.png");
 
-	std::cout << "num threads: "<<cv::getNumThreads() << std::endl;
-	std::cout << "num cpu's: "<<cv::getNumberOfCPUs()<<std::endl;
+	//std::cout << "num threads: "<<cv::getNumThreads() << std::endl;
+	//std::cout << "num cpu's: "<<cv::getNumberOfCPUs()<<std::endl;
 #ifdef ENABLE_TIMING
 	clock_t stop_s=clock();  // end
 	Display_time((stop_s - start_s)/CLOCKS_PER_MS);
