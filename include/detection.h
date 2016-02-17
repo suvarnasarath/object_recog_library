@@ -80,6 +80,5 @@ void register_camera(unsigned int camera_id, const platform_camera_parameters * 
 int  get_registered_sample_size();
 void set_sample_filter(const std::vector<bool> &filter);
 void set_debug(LOGLEVEL level );
-bool compare_HuMoments(const std::vector<double> &GroundtruthHuMoments, const double *ComputedHuMoments);
 
 #endif

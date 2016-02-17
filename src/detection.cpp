@@ -10,7 +10,6 @@
 #define USE_LAB_SPACE		(!USE_HSV_SPACE)
 #define USE_MORPHOLOGICAL_OPS 	(1)
 #define ENABLE_DEPTH_TEST	(0)
-#define ENABLE_SHAPE_TEST	(0)
 #define ENABLE_TEXTURE_TEST	(1)
 #define ENABLE_TIMING		(1)
 #define ENABLE_RESIZING		(0)
@@ -508,8 +507,6 @@ void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
 					               sat_factor * sat_weighting_factor +
 					               val_factor * val_weighting_factor;
 
-			//uint8_t image_value = response_value * 255;
-			//image_value = image_value > MIN_INTENSITY_THRESHOLD_VALUE ? 255 : 0;
 			response.at<float>(rows,cols) = response_value;
 		}
 	}
@@ -540,52 +537,6 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 	L_channel = L_median;
 	L_channel.convertTo(L_inter,CV_32FC1);
 #endif
-
-#if NEVER_USED
-    cv::Mat L_blurred = cv::Mat::zeros(L_inter.rows,L_inter.cols,CV_32FC1);
-    cv::Mat dst, heat_map_copy;
-
-#if (CUDA_GPU)
-    gpu_in.upload(L_inter);
-    cv::gpu::GaussianBlur(gpu_in, gpu_gblur, cv::Size(31,31),10,0,cv::BORDER_DEFAULT);
-//    gpu_out.download(blurred_heatmap);
-#else
-    // Use the more efficient 1D kernels in sequence instead of the high level GaussianBlur.
-    cv::GaussianBlur(L_inter,L_blurred,cv::Size(159,159),50,0,cv::BORDER_DEFAULT);
-    //cv::boxFilter(L_inter,blurred_heatmap,-1,cv::Size(159,159));
-    //cv::sepFilter2D(L_inter,blurred_heatmap,CV_32F,GKernelX,GKernelY);
-#endif
-
-
-#if (CUDA_GPU)
-//    gpu_in.upload(blurred_heatmap);
-    cv::gpu::add(gpu_gblur, 1, gpu_out);
-    gpu_out.download(dst);
-#else
-    cv::add(1,L_blurred,dst);
-#endif
-    DUMP_IMAGE(dst,"/tmp/L_blur.png");
-
-
-#if (CUDA_GPU)
-//    gpu_in.upload(L_inter);
-    cv::gpu::divide(gpu_in, gpu_out, gpu_div);
-//    gpu_div.download(L_inter);
-#else
-    cv::divide(L_inter,dst,L_inter);
-#endif
-
-#if (CUDA_GPU)
-//    gpu_in.upload(L_inter);
-    cv::gpu::multiply(gpu_div, 128, gpu_out);
-    gpu_out.download(L_inter);
-#else
-    cv::multiply(128,L_inter,L_inter);
-#endif
-    DUMP_IMAGE(L_inter,"/tmp/L_division.png");
-    L_channel = L_inter;
-#endif
-
 
 	response = cv::Mat::zeros(L_channel.rows,L_channel.cols,CV_32FC1);
 
@@ -638,28 +589,10 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 					               a_factor * a_weighting_factor +
 					               b_factor * b_weighting_factor;
 
-			//const float THRESHOLD = static_cast<double>(MIN_INTENSITY_THRESHOLD_VALUE) / 255.0;
-			//uint8_t image_value = response_value > THRESHOLD ? 255 : 0;
 			response.at<float>(rows,cols) = response_value * 255.0;
 		}
 	}
 	out = response;
-}
-
-bool compare_HuMoments(const std::vector<double> &GroundtruthHuMoments, const double *ComputedHuMoments)
-{
-	double Hu_similarity;
-	for(int i =0; i < 7 ; i++)
-	{
-		Hu_similarity = std::abs(GroundtruthHuMoments[i] - LOG_TRANSF(ComputedHuMoments[i]));
-
-		if(Hu_similarity < THRESHOLD) {
-			continue;
-		} else {
-			return false;
-		}
-	}
-	return true;
 }
 
 void getPixelCount(unsigned int camera_index, unsigned int sample_index, double Dist2Sample, double &min_size, double &max_size)
@@ -809,21 +742,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
         cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 10.0, false );
         boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
-
-#if ENABLE_SHAPE_TEST
-   	    double HuMoments[7];
-   	    // Compute Moments
-        cv::HuMoments(cv::moments(contours[i]),HuMoments);
-
-        // Compare Hu moments of this contour with our stored Hu moments
-        if(compare_HuMoments(registered_sample[index].moments,HuMoments))
-        {
-        	if(bPrintDebugMsg > DEBUG) std::cout << "Passed shape test: " << std::endl;
-		} else {
-			if(bPrintDebugMsg > DEBUG) std::cout << "Failed shape test: " << std::endl;
-			continue;
-		}
-#endif
 
          // Get the pixel coordinates of the rectangular bounding box
         cv::Point tl = boundRect[i].tl();
