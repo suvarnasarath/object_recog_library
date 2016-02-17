@@ -407,13 +407,11 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 }
 
 
-cv::Mat src,texture_out;
-bool thread_state;
+cv::Mat src_gray,texture_out;
 
 #if( USE_THREADS)
 void *GetTextureImageThread(void * gray)
 {
-	thread_state = false;
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
 	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
@@ -424,11 +422,11 @@ void *GetTextureImageThread(void * gray)
 	int kern = 7;
 
 	/// Gradient X
-	cv::Sobel( src, grad_x, ddepth, 1, 0, kern, scale, delta, cv::BORDER_DEFAULT );
+	cv::Sobel( src_gray, grad_x, ddepth, 1, 0, kern, scale, delta, cv::BORDER_DEFAULT );
 	cv::convertScaleAbs( grad_x, abs_grad_x );
 
 	/// Gradient Y
-	cv::Sobel( src, grad_y, ddepth, 0, 1, kern, scale, delta, cv::BORDER_DEFAULT );
+	cv::Sobel( src_gray, grad_y, ddepth, 0, 1, kern, scale, delta, cv::BORDER_DEFAULT );
 	cv::convertScaleAbs( grad_y, abs_grad_y );
 
 	/// Total Gradient (approximate)
@@ -443,75 +441,10 @@ void *GetTextureImageThread(void * gray)
 	cv::erode(texture_out,erosion_dst,erosion_element);
 	cv::dilate(erosion_dst,texture_out,dilation_element);
 
-	thread_state = true;
+	DUMP_IMAGE(texture_out,"/tmp/texture_out_thread.png");
+
 }
 #endif
-
-void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
-									   const channel_info & sat,
-									   const channel_info & val,cv::Mat &out,
-									   std::vector<cv::Mat>&image_planes)
-{
-	cv::Mat input = in_hsv,response;
-	cv::Mat H = image_planes[0];
-	cv::Mat S = image_planes[1];
-	cv::Mat V = image_planes[2];
-
-	response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
-
-	int hue_ref = hue.origin*255/179;       //0; //HRange[1]*255/179;hi
-	int32_t sat_ref = sat.origin; 			//0 ; //SRange[1];
-	int32_t val_ref = val.origin; 			//115; //VRange[1];
-
-	// Assuming uniform deviation for now.
-	const int32_t max_hue_dev = hue.deviation;//10;
-	const int32_t max_sat_dev = sat.deviation;//5;
-	const int32_t max_val_dev = val.deviation;//20;
-
-	const float hue_weighting_factor = hue.weight; // 0.05;
-	const float sat_weighting_factor = sat.weight; // 0.5;
-	const float val_weighting_factor = val.weight; // 0.45;
-
-	const float hue_mult_factor = 1.0/static_cast<double>(max_hue_dev);
-	const float sat_mult_factor = 1.0/static_cast<double>(max_sat_dev);
-	const float val_mult_factor = 1.0/static_cast<double>(max_val_dev);
-
-	for(int rows = 0 ;rows < input.rows; rows++)
-	{
-		for(int cols =0; cols < input.cols; cols++)
-		{
-			uint8_t hue_image = static_cast<uint32_t>(H.at<uint8_t>(rows,cols))*255/179;
-			uint8_t hue_diff = hue_image - hue_ref;
-
-			int32_t saturation = static_cast<int32_t>(S.at<uint8_t>(rows,cols));
-			int32_t value = static_cast<int32_t>(V.at<uint8_t>(rows,cols));
-
-			int32_t saturation_deviation = saturation - sat_ref;
-			int32_t value_deviation = value - val_ref;
-			int32_t hue_deviation = static_cast<int8_t>(hue_diff);
-
-			saturation_deviation = std::max(-max_sat_dev,std::min(max_sat_dev,saturation_deviation));
-			saturation_deviation = max_sat_dev - std::abs(saturation_deviation);
-			float sat_factor = sat_mult_factor * saturation_deviation;
-
-
-			value_deviation = std::max(-max_val_dev,std::min(max_val_dev,value_deviation));
-			value_deviation = max_val_dev - std::abs(value_deviation);
-			float val_factor = val_mult_factor * value_deviation;
-
-			hue_deviation = std::max(-max_hue_dev,std::min(max_hue_dev,hue_deviation));
-			hue_deviation = max_hue_dev - std::abs(hue_deviation);
-			float hue_factor = hue_mult_factor * hue_deviation;
-
-			float response_value = hue_factor * hue_weighting_factor +
-					               sat_factor * sat_weighting_factor +
-					               val_factor * val_weighting_factor;
-
-			response.at<float>(rows,cols) = response_value;
-		}
-	}
-	out = response;
-}
 
 void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 									   const channel_info & a_info,
@@ -672,8 +605,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     DUMP_IMAGE(heat_map,"/tmp/heat_map.png");
 
-    // Check if texture thread is done
-
     if(texture_out.data)
     {
 #if (CUDA_GPU)
@@ -688,6 +619,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 			cv::multiply(texture_out,heat_map,heat_map,1/255.0,CV_32FC1);
 		}
 #endif
+    } else {
+    	std::cout << " no texture map" << std::endl;
     }
     DUMP_IMAGE(heat_map,"/tmp/heat_map_mul.png");
 
@@ -870,7 +803,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		bInit = true;
 	}
 
-	cv::Mat lab_image,src_gray,src_rescaled;
+	cv::Mat lab_image,src_rescaled;
 	if(! imgPtr->data) {
 		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
@@ -953,28 +886,98 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	{
 		if(registered_sample[index].isValid)
 		{
-		  process_image(camera_index,lab_image, out_image,index,detected_samples,image_planes);
+			process_image(camera_index,lab_image, out_image,index,detected_samples,image_planes);
 		}
 	}
 
-#if (USE_THREADS)
-	pthread_join(texture_thread,NULL);
-#endif
 	// draw bounding boxes on the input image
 	for (int index = 0; index < BB_Points.size(); ++index)
 	{
 		rectangle(Input_image, BB_Points[index].tl(), BB_Points[index].br(),(0, 0, 255), 2, 8, 0);
 	}
 
+#if (USE_THREADS)
+	//pthread_join(texture_thread,NULL);
+#endif
+
 	// Clear the samples for next iteration
 	BB_Points.clear();
 	// Log image
 	DUMP_IMAGE(Input_image,"/tmp/BB.png");
 
-	//std::cout << "num threads: "<<cv::getNumThreads() << std::endl;
-	//std::cout << "num cpu's: "<<cv::getNumberOfCPUs()<<std::endl;
 #ifdef ENABLE_TIMING
 	clock_t stop_s=clock();  // end
 	Display_time((stop_s - start_s)/CLOCKS_PER_MS);
 #endif
 }
+
+
+
+
+/*
+  void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
+									   const channel_info & sat,
+									   const channel_info & val,cv::Mat &out,
+									   std::vector<cv::Mat>&image_planes)
+{
+	cv::Mat input = in_hsv,response;
+	cv::Mat H = image_planes[0];
+	cv::Mat S = image_planes[1];
+	cv::Mat V = image_planes[2];
+
+	response = cv::Mat::zeros(H.rows,H.cols,CV_32FC1);
+
+	int hue_ref = hue.origin*255/179;       //0; //HRange[1]*255/179;hi
+	int32_t sat_ref = sat.origin; 			//0 ; //SRange[1];
+	int32_t val_ref = val.origin; 			//115; //VRange[1];
+
+	// Assuming uniform deviation for now.
+	const int32_t max_hue_dev = hue.deviation;//10;
+	const int32_t max_sat_dev = sat.deviation;//5;
+	const int32_t max_val_dev = val.deviation;//20;
+
+	const float hue_weighting_factor = hue.weight; // 0.05;
+	const float sat_weighting_factor = sat.weight; // 0.5;
+	const float val_weighting_factor = val.weight; // 0.45;
+
+	const float hue_mult_factor = 1.0/static_cast<double>(max_hue_dev);
+	const float sat_mult_factor = 1.0/static_cast<double>(max_sat_dev);
+	const float val_mult_factor = 1.0/static_cast<double>(max_val_dev);
+
+	for(int rows = 0 ;rows < input.rows; rows++)
+	{
+		for(int cols =0; cols < input.cols; cols++)
+		{
+			uint8_t hue_image = static_cast<uint32_t>(H.at<uint8_t>(rows,cols))*255/179;
+			uint8_t hue_diff = hue_image - hue_ref;
+
+			int32_t saturation = static_cast<int32_t>(S.at<uint8_t>(rows,cols));
+			int32_t value = static_cast<int32_t>(V.at<uint8_t>(rows,cols));
+
+			int32_t saturation_deviation = saturation - sat_ref;
+			int32_t value_deviation = value - val_ref;
+			int32_t hue_deviation = static_cast<int8_t>(hue_diff);
+
+			saturation_deviation = std::max(-max_sat_dev,std::min(max_sat_dev,saturation_deviation));
+			saturation_deviation = max_sat_dev - std::abs(saturation_deviation);
+			float sat_factor = sat_mult_factor * saturation_deviation;
+
+
+			value_deviation = std::max(-max_val_dev,std::min(max_val_dev,value_deviation));
+			value_deviation = max_val_dev - std::abs(value_deviation);
+			float val_factor = val_mult_factor * value_deviation;
+
+			hue_deviation = std::max(-max_hue_dev,std::min(max_hue_dev,hue_deviation));
+			hue_deviation = max_hue_dev - std::abs(hue_deviation);
+			float hue_factor = hue_mult_factor * hue_deviation;
+
+			float response_value = hue_factor * hue_weighting_factor +
+					               sat_factor * sat_weighting_factor +
+					               val_factor * val_weighting_factor;
+
+			response.at<float>(rows,cols) = response_value;
+		}
+	}
+	out = response;
+}
+ */

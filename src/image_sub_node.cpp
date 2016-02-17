@@ -72,13 +72,6 @@ int main(int argc, char **argv)
 	/********************************/
 	/******** Register samples ******/
 	/********************************/
-	std::vector<double>moments{ 0.234046,
-								0.015061,
-								0.00422825,
-								0.00475167,
-								2.12851e-05,
-								0.00058314,
-								-7.57831e-07};
 
 #ifdef SIMULATOR  // Gazebo has some weirdness that I still needs to be figure.
 	/*
