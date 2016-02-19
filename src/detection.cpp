@@ -1,7 +1,7 @@
 #include <math.h>
 #include "detection.h"
-#include <time.h>
 #include <pthread.h>
+#include <stdio.h>
 
 //#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD  	(1)
@@ -13,7 +13,7 @@
 #define ENABLE_TEXTURE_TEST	(1)
 #define ENABLE_TIMING		(1)
 #define ENABLE_RESIZING		(0)
-#define USE_THREADS  (1)
+#define USE_THREADS  (0)
 
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
@@ -34,13 +34,12 @@
 #define Epsilon (0.001)
 #define THRESHOLD (0.5)
 
-#define CLOCKS_PER_SEC  1000000l
 #define CLOCKS_PER_MS   (CLOCKS_PER_SEC/1000)
 
-void Display_time(clock_t time_elapsed)
+void Display_time(double  time_elapsed)
 {
 	std::cout << "-------------------------" << std::endl;
-	std::cout<<"Total time: "<< time_elapsed <<std::endl;
+	std::cout<<"Time in secs: "<< time_elapsed <<std::endl;
 	std::cout << "-------------------------" << std::endl;
 }
 
@@ -412,6 +411,7 @@ cv::Mat src_gray,texture_out;
 #if( USE_THREADS)
 void *GetTextureImageThread(void * gray)
 {
+
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
 	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
@@ -442,6 +442,9 @@ void *GetTextureImageThread(void * gray)
 	cv::dilate(erosion_dst,texture_out,dilation_element);
 
 	DUMP_IMAGE(texture_out,"/tmp/texture_out_thread.png");
+
+
+	pthread_exit(NULL);
 
 }
 #endif
@@ -530,6 +533,7 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 
 void getPixelCount(unsigned int camera_index, unsigned int sample_index, double Dist2Sample, double &min_size, double &max_size)
 {
+
 	float min_sample_size_pixels,max_sample_size_pixels;
 	double K1 =  camera_parameters[camera_index].Hpixels/1.4;
 	double K2 = camera_parameters[camera_index].Vpixels/0.7;
@@ -784,6 +788,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 			}
 		}
 	}
+
     // Print the number of samples found
 	if(bPrintDebugMsg > DEBUG)
 		std::cout << "Number of samples found: "<< detected_samples.size() << std::endl;
@@ -795,6 +800,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 #ifdef ENABLE_TIMING
 	// Get clock
 	clock_t start_s=clock();
+	double t = (double)cv::getTickCount();
 #endif
 
 	if(!bInit)
@@ -851,9 +857,12 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 #endif // CUDA_GPU
 
 #if (USE_THREADS)
+
 	// Create thread
 	pthread_t texture_thread;
 	pthread_create(&texture_thread,NULL,&GetTextureImageThread,&src_gray);
+
+
 #else
 	GetTextureImage(src_gray,texture_out);
 #endif
@@ -906,13 +915,9 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	DUMP_IMAGE(Input_image,"/tmp/BB.png");
 
 #ifdef ENABLE_TIMING
-	clock_t stop_s=clock();  // end
-	Display_time((stop_s - start_s)/CLOCKS_PER_MS);
+	Display_time(((double)cv::getTickCount() - t)/cv::getTickFrequency());
 #endif
 }
-
-
-
 
 /*
   void generate_heat_map_in_HSV(cv::Mat &in_hsv,const channel_info & hue,
