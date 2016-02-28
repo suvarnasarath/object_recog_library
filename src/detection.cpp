@@ -612,7 +612,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     if(texture_out.data)
     {
 #if (CUDA_GPU)
-		gpu_in.upload(texture_image);
+		gpu_in.upload(texture_out);
 		gpu_in2.upload(heat_map);
 		gpu_in.convertTo(gpu_in, CV_32FC1);
 		gpu_in2.convertTo(gpu_in2, CV_32FC1);
