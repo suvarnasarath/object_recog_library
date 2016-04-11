@@ -124,13 +124,15 @@ bool Initialize_lib()
 		int erosion_size = 4;
 		int dilation_size = 4;
 		// erode and dilate
-		erosion_element = cv::getStructuringElement( cv::MORPH_RECT,
-											 cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
-											 cv::Point( erosion_size, erosion_size ) );
+		erosion_element = cv::getStructuringElement( cv::MORPH_RECT
+				, cv::Size( 2*erosion_size + 1, 2*erosion_size+1 )
+				, cv::Point( erosion_size, erosion_size )
+				);
 
-		dilation_element = cv::getStructuringElement( cv::MORPH_RECT,
-											 cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),
-											 cv::Point( dilation_size, dilation_size ) );
+		dilation_element = cv::getStructuringElement( cv::MORPH_RECT
+				, cv::Size( 2*dilation_size + 1, 2*dilation_size+1 )
+				, cv::Point( dilation_size, dilation_size )
+				);
 	}
 	return true;
 }
@@ -331,77 +333,250 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 	return world_pos;
 }
 
+/**
+ * ORL_Sobel -- Applies Sobel Filter
+ * @src		source InputArray
+ * @dst		destination OutputArray
+ * @dx		dx order of derivative filter
+ * @dy		dy order of derivative filter
+ * @kern	kernel size
+ * @scale	scaling factor of derivative values
+ * @ddepth	output image depth (8-bit, etc), -1 default to same depth (usually)
+ * @delta	delta added to results prior to storing in dst (CPU Only)
+ * @borderType	pixel extrapolation method
+ */
+void ORL_Sobel  (cv::Mat src, cv::Mat dst
+		, int dx, int dy, int kern, int scale
+		, int ddepth = -1, int delta = 0, int borderType = cv::BORDER_DEFAULT) {
+#if (CUDA_GPU)
+	cv::Ptr<cv::cuda::Filter> sobel = cv::cuda::createSobelFilter(src.type()
+					, ddepth, dx, dy, kern, scale, borderType);
+	sobel->apply(src, dst);
+#else
+	cv::Sobel(src, dst, ddepth, dx, dy, kern, scale, delta, borderType);
+#endif
+}
+
+/**
+ * ORL_AddWeighted -- Adds InputArrays with weighted values
+ * @input_1	first source InputArray
+ * @alpha	weight for first array
+ * @input_2	second source InputArray
+ * @beta	weight for second array
+ * @gamma	scalar added to each sum
+ * @dst		destination OutputArray
+ * @ddepth	destination type (-1 same as source)
+ */
+void ORL_AddWeighted(cv::Mat input_1, double alpha, cv::Mat input_2, double beta, double gamma, cv::Mat dst, int ddepth = -1) {
+#if (CUDA_GPU)
+	cv::cuda::addWeighted(input_1, alpha, input_2, beta, gamma, dst, ddepth);
+#else
+	cv::addWeighted(input_1, alpha, input_2, beta, gamma, dst, ddepth);
+#endif
+}
+
+/**
+ * ORL_BoxFilter -- Applies BoxFilter on Image
+ * @src		source InputArray
+ * @kern	kernel size
+ * @dst		destination OutputArray
+ * @ddepth	destination type (-1 same as source)
+ * @anchor	default value means anchor point for kernel in center
+ * @normalize	specifies if kernel is normalized by area
+ * @borderType	extrapolate pixels outside image
+ */
+void ORL_BoxFilter(cv::Mat src, int kern, cv::Mat dst, int ddepth = -1
+		 , cv::Point anchor = cv::Point(-1,-1), bool normalize = true, int borderType = cv::BORDER_DEFAULT) {
+#if (CUDA_GPU)
+	cv::Ptr<cv::cuda::Filter> blur = cv::cuda::createBoxFilter(src.type(), ddepth, cv::Size(kern,kern) );
+	blur->apply(src, dst);
+#else
+	cv::boxFilter(src, dst, ddepth, cv::Size(kern,kern), anchor, normalize, borderType);
+#endif
+}
+
+/**
+ * ORL_MedianFilter -- Applies MedianFilter on Image
+ * @src		source InputArray
+ * @kern	kernel size
+ * @dst		destination OutputArray
+ */
+void ORL_MedianFilter(cv::Mat src, int kern, cv::Mat dst) {
+#if (CUDA_GPU)
+	cv::Ptr<cv::cuda::Filter> blur = cv::cuda::createMedianFilter(src.type(), kern);
+	blur->apply(src, dst);
+#else
+	cv::medianBlur(src, dst, kern);
+#endif
+}
+
+/**
+ * ORL_Normalize -- Normalizes Image
+ * @src		source InputArray
+ * @dst		destination OutputArray
+ * @alpha	value to normalize to or lower range boundary
+ * @beta	upper range boundary in case of the range normalization
+ * @norm_type	NORM_MINMAX, NORM_INF, NORM_L1, or NORM_L2
+ * @ddepth	destination type (-1 same as source)
+ * @mask	Optional operational mask
+ */
+void ORL_Normalize(cv::Mat src, cv::Mat dst, double alpha = 1, double beta = 0
+		 , int norm_type = cv::NORM_MINMAX, int ddepth = -1, cv::InputArray mask = cv::noArray()) {
+#if (CUDA_GPU)
+	cv::cuda::normalize(src, dst, alpha, beta, cv::NORM_MINMAX, ddepth, mask);
+#else
+	cv::normalize(src, dst, alpha, beta, cv::NORM_MINMAX, ddepth, mask);
+#endif
+}
+
+/**
+ * ORL_Subtract -- Subtracts Scalar over Image
+ * @scalar	value to subtract
+ * @src		source InputArray
+ * @dst		destination OutputArray
+ */
+void ORL_Subtract(int scalar, cv::Mat src, cv::Mat dst) {
+	cv::Mat const_val = cv::Mat(src.size(), src.type());
+	const_val = cv::Scalar(scalar);
+#if (CUDA_GPU)
+	cv::cuda::subtract(const_val, src, dst);
+#else
+	cv::subtract(const_val, src, dst);
+#endif
+}
+
+/**
+ * ORL_Morph_Erode -- Performs morphological erode
+ * @src		source InputArray
+ * @dst		destination OutputArray
+ */
+void ORL_Morph_Erode(cv::Mat src, cv::Mat dst) {
+#if (CUDA_GPU)
+	cv::Ptr<cv::cuda::Filter> erode = cv::cuda::createMorphologyFilter(cv::MORPH_ERODE, src.type(), erosion_element);
+	erode->apply(src, dst);
+#else
+	cv::erode(src, dst, erosion_element);
+#endif
+}
+
+
+/**
+ * ORL_Morph_Dilate -- Performs morphological dilate
+ * @src		source InputArray
+ * @dst		destination OutputArray
+ */
+void ORL_Morph_Dilate(cv::Mat src, cv::Mat dst) {
+#if (CUDA_GPU)
+	cv::Ptr<cv::cuda::Filter> dilate = cv::cuda::createMorphologyFilter(cv::MORPH_DILATE, src.type(), dilation_element);
+	dilate->apply(src, dst);
+#else
+	cv::dilate(src, dst, dilation_element);
+#endif
+}
+
+/**
+ * ORL_Multiply -- Performs a multiply operation
+ * @src		source InputArray
+ * @dst		destination OutputArray
+ */
+void ORL_Multiply(cv::Mat src1, cv::Mat src2, cv::Mat dst, double scale = 1, int ddepth = -1) {
+#if (CUDA_GPU)
+	cv::cuda::multiply(src1, src2, dst, scale, ddepth);
+#else
+	cv::multiply(src1, src2, dst, dst, scale, ddepth);
+#endif
+}
+
+
+/**
+ * ORL_Threshold -- Applies first-level threshold
+ */
+void ORL_Threshold(cv::Mat src, cv::Mat dst, double thresh, double maxval, int type) {
+#if (CUDA_GPU)
+    cv::cuda::threshold(src, dst, thresh , maxval, type);
+#else
+    cv::threshold(scr, dst, thresh, maxval, type);
+#endif
+}
+
+
+/**
+ * ORL_ConvertColor -- converts color space
+ */
+void ORL_ConvertColor(cv::Mat src, cv::Mat dst, int code = cv::ColorConversionCodes::COLOR_RGB2Lab, int dcn = 0) {
+#if (CUDA_GPU)
+	cv::cuda::cvtColor(src, dst, code, dcn);
+#else
+	cv::cvtColor(src, dst, code, dcn);
+#endif
+}
+
 void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 {
-#if (CUDA_GPU)
-	cv::gpu::GpuMat gpu_in, gpu_in2, gpu_out;
-#endif
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
 	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
 
-	int scale = 1;
-	int delta = 0;
-	int ddepth = -1;
-	int kern = 7;
+	int dx = 1;		// dx order of derivative filter
+	int dy = 0;		// dy order of derivative filter
+	int ddepth = -1;	// output image depth (8-bit, etc), -1 default to same depth (usually)
+	int kern = 7;		// kernel size
+	int scale = 1;		// scaling factor of derivative values
+	int delta = 0;		// delta added to results prior to storing in dst
 
+
+	///////////////////////////////////////////////////////////////////////
 	/// Gradient X
-#if (CUDA_GPU)
-	gpu_in.upload(src);
-	cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 1, 0, kern, scale, cv::BORDER_DEFAULT);
-	gpu_out.download(grad_x);
-#else
-	cv::Sobel( src, grad_x, ddepth, 1, 0, kern, scale, delta, cv::BORDER_DEFAULT );
-#endif
+	dx = 1;
+	dy = 0;
+	ORL_Sobel(src, grad_x, dx, dy, kern, scale);
 	cv::convertScaleAbs( grad_x, abs_grad_x );
 
+
+	///////////////////////////////////////////////////////////////////////
 	/// Gradient Y
-#if (CUDA_GPU)
-	gpu_in.upload(src);
-	cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 0, 1, kern, scale, cv::BORDER_DEFAULT);
-	gpu_out.download(grad_y);
-#else
-	cv::Sobel( src, grad_y, ddepth, 0, 1, kern, scale, delta, cv::BORDER_DEFAULT );
-#endif
+	dx = 0;
+	dy = 1;
+	ORL_Sobel(src, grad_y, dx, dy, kern, scale);
 	cv::convertScaleAbs( grad_y, abs_grad_y );
 
+
+	///////////////////////////////////////////////////////////////////////
 	/// Total Gradient (approximate)
-#if (CUDA_GPU)
-	gpu_in.upload(abs_grad_x);
-	gpu_in2.upload(abs_grad_y);
-	cv::gpu::addWeighted( gpu_in, 0.5, gpu_in2, 0.5, 0, gpu_out );
-	gpu_out.download(dst);
-#else
-	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst );
-#endif
+	double alpha = 0.5;	// weight for first array
+	double beta = 0.5;	// weight for second array
+	double gamma = 0.0;	// scalar added to each sum
+        ORL_AddWeighted(abs_grad_x, alpha, abs_grad_y, beta, gamma, dst);
 	DUMP_IMAGE(dst,"/tmp/texture_derivative_out.png");
 
-#if (CUDA_GPU & 0)
-	cv::gpu::boxFilter(gpu_in, gpu_out,-1, cv::Size(39,39));
-	gpu_out.download(smoothed_image);
-#else
-	cv::medianBlur(dst,smoothed_image,39);
-#endif
+
+	///////////////////////////////////////////////////////////////////////
+	// Smoothed image
+	kern = 39;
+	ORL_MedianFilter(dst, kern, smoothed_image);
 	DUMP_IMAGE(smoothed_image,"/tmp/texture_median_out.png");
 
-	cv::normalize(smoothed_image,normalized_image,1.0,255.0,cv::NORM_MINMAX);
+
+	///////////////////////////////////////////////////////////////////////
+	// Normalized image
+	alpha = 1.0;	// the lower range boundary
+	beta = 255.0;	// the upper range boundary
+	ORL_Normalize(smoothed_image, normalized_image, alpha, beta, cv::NORM_MINMAX);
 	DUMP_IMAGE(normalized_image,"/tmp/texture_normalised_out.png");
 
-	cv::subtract(255.0,normalized_image,dst);
 
+	///////////////////////////////////////////////////////////////////////
+	// Normalized reduction
+	ORL_Subtract(beta, normalized_image, dst);
+
+
+	///////////////////////////////////////////////////////////////////////
+	// Morphological operations
 #if (USE_MORPHOLOGICAL_OPS)
-	#if (CUDA_GPU)
-		gpu_in.upload(dst);
-		cv::gpu::erode(gpu_in, gpu_in2, erosion_element);
-		cv::gpu::dilate(gpu_in2, gpu_out, dilation_element);
-		gpu_in2.download(erosion_dst);
-		gpu_out.download(dst);
-	#else
-		cv::erode(dst,erosion_dst,erosion_element);
-		cv::dilate(erosion_dst,dst,dilation_element);
-	#endif // CUDA
-		DUMP_IMAGE(dst,"/tmp/texture_dilation_out.png");
-		DUMP_IMAGE(erosion_dst,"/tmp/texture_erosion_out.png");
+	ORL_Morph_Erode(dst, erosion_dst);
+	ORL_Morph_Dilate(erosion_dst, dilation_dst);
+	DUMP_IMAGE(dilation_dst,"/tmp/texture_dilation_out.png");
+	DUMP_IMAGE(erosion_dst,"/tmp/texture_erosion_out.png");
 #endif //USE_MORPHOLOGICAL_OPS
 }
 
@@ -449,30 +624,20 @@ void *GetTextureImageThread(void * gray)
 }
 #endif
 
-void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
-									   const channel_info & a_info,
-									   const channel_info & b_info,cv::Mat &out,
-									   std::vector<cv::Mat>&image_planes)
+void generate_heat_map_LAB(cv::Mat &in_lab
+			, const channel_info & L_info, const channel_info & a_info, const channel_info & b_info
+			, cv::Mat &out, std::vector<cv::Mat> &image_planes)
 {
 	cv::Mat input = in_lab,response,L_median,L_inter;
 	cv::Mat L_channel = image_planes[0];
 	cv::Mat a_channel = image_planes[1];
 	cv::Mat b_channel = image_planes[2];
 
-#if (CUDA_GPU)
-    cv::gpu::GpuMat gpu_in, gpu_gblur, gpu_div, gpu_out;
-	gpu_in.upload(L_channel);
-	cv::gpu::boxFilter(gpu_in, gpu_out, -1, cv::Size(11,11));
-	gpu_out.download(L_median);
+	int kern = 11;
+	ORL_MedianFilter(L_channel, kern, L_median);
 	DUMP_IMAGE(L_median,"/tmp/L_median.png");
-	gpu_out.convertTo(gpu_out, CV_32FC1);
-	gpu_out.download(L_inter);
-#else
-	cv::medianBlur(L_channel,L_median,11);
-	DUMP_IMAGE(L_median,"/tmp/L_median.png");
-	L_channel = L_median;
+
 	L_channel.convertTo(L_inter,CV_32FC1);
-#endif
 
 	response = cv::Mat::zeros(L_channel.rows,L_channel.cols,CV_32FC1);
 
@@ -589,75 +754,58 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 	// sample index is same for all samples this call
 	sample.id = index;
 
-    cv::Mat heat_map, erosion_dst, dilation_dst;
-#if (CUDA_GPU)
-    cv::gpu::GpuMat gpu_in, gpu_in2, gpu_erode, gpu_dilate, gpu_out;
-#endif
+	cv::Mat heat_map, erosion_dst, dilation_dst;
 
-    std::vector<std::vector<cv::Point> > contours;
-    std::vector<cv::Vec4i> hierarchy;
-    double computed_area_in_pixels, height, dist, expected_area_in_pixels;
-    double min_expected_size,max_expected_size;
+	std::vector<std::vector<cv::Point> > contours;
+	std::vector<cv::Vec4i> hierarchy;
+	double computed_area_in_pixels, height, dist, expected_area_in_pixels;
+	double min_expected_size,max_expected_size;
 
 #if(USE_HSV_SPACE)
-    generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
+	generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
     							registered_sample[index].channel3,heat_map,image_planes);
 #elif(USE_LAB_SPACE)
-    generate_heat_map_LAB(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
+	generate_heat_map_LAB(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
         							registered_sample[index].channel3,heat_map,image_planes);
 #endif
 
-    DUMP_IMAGE(heat_map,"/tmp/heat_map.png");
+	DUMP_IMAGE(heat_map,"/tmp/heat_map.png");
 
-    if(texture_out.data)
-    {
-#if (CUDA_GPU)
-		gpu_in.upload(texture_out);
-		gpu_in2.upload(heat_map);
-		gpu_in.convertTo(gpu_in, CV_32FC1);
-		gpu_in2.convertTo(gpu_in2, CV_32FC1);
-		cv::gpu::multiply(gpu_in, gpu_in2, gpu_out, 1/255.0,CV_32FC1);
-		gpu_out.download(heat_map);
-#else
-		if(registered_sample[index].Id == WHITE) {
-			cv::multiply(texture_out,heat_map,heat_map,1/255.0,CV_32FC1);
+	if (texture_out.data) {
+		double scale = 1/255.0;
+		if (registered_sample[index].Id == WHITE) {
+			ORL_Multiply(texture_out, heat_map, heat_map, scale,CV_32FC1);
 		}
-#endif
-    } else {
-    	std::cout << " no texture map" << std::endl;
-    }
-    DUMP_IMAGE(heat_map,"/tmp/heat_map_mul.png");
+	} else {
+		std::cout << " no texture map" << std::endl;
+	}
+	DUMP_IMAGE(heat_map,"/tmp/heat_map_mul.png");
 
 #if(USE_GLOBAL_THRESHOLD)
 
-#if (CUDA_GPU)
-    cv::gpu::threshold(gpu_out, gpu_out,140,255,CV_THRESH_BINARY);
-    gpu_out.download(heat_map); 
-#else
-    cv::threshold(heat_map,heat_map,140,255,CV_THRESH_BINARY);
-#endif
-    heat_map.convertTo(heat_map, CV_8UC1);
+	int thresh = 140;
+	int maxval = 255;
+	ORL_Threshold(heat_map, heat_map, thresh, maxval, CV_THRESH_BINARY);
+	heat_map.convertTo(heat_map, CV_8UC1);
 
 #elif(USE_ADAPTIVE_THRESHOLD)
-    heat_map.convertTo(heat_map, CV_8UC1);
-    cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,151,-35);
+	heat_map.convertTo(heat_map, CV_8UC1);
+	// adaptiveMethod Adaptive thresholding algorithm to use, see cv::AdaptiveThresholdTypes
+	int block_size = 151;
+	int const_offset_from_mean = -35;
+	cv::adaptiveThreshold(heat_map, heat_map, maxval
+			, cv::ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY
+			, block_size, const_offset_from_mean);
 #endif
-    DUMP_IMAGE(heat_map,"/tmp/thresh_heat_map.png");
+	DUMP_IMAGE(heat_map,"/tmp/thresh_heat_map.png");
 
 
 #if USE_MORPHOLOGICAL_OPS
 
-	#if (CUDA_GPU)
-		gpu_in.upload(heat_map);
-		cv::gpu::erode(gpu_in, gpu_erode, erosion_element);
-		cv::gpu::dilate(gpu_erode, gpu_dilate, dilation_element);
-		gpu_dilate.download(heat_map);
-	#else
-		cv::erode(heat_map,erosion_dst,erosion_element);
-		cv::dilate(erosion_dst,heat_map,dilation_element);
-	#endif  // CUDA
-		//DUMP_IMAGE(erosion_dst,"/tmp/erosion_out.png"); // No GPU download
-		DUMP_IMAGE(heat_map,"/tmp/dilation_out.png");
+	ORL_Morph_Erode(heat_map, erosion_dst);
+	ORL_Morph_Dilate(erosion_dst, heat_map);
+	DUMP_IMAGE(erosion_dst,"/tmp/erosion_out.png");
+	DUMP_IMAGE(heat_map,"/tmp/dilation_out.png");
 
 #endif //USE_MORPHOLOGICAL_OPS
 
@@ -834,27 +982,13 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		return;
 	}
 
-
-#if (CUDA_GPU)
-	cv::gpu::GpuMat gpu_in, gpu_out;
-	gpu_in.upload(Input_image);
-	cv::gpu::cvtColor(gpu_in, gpu_out,CV_RGB2Lab);
-	gpu_out.download(lab_image);
-#else
 	// Convert the color space to Lab
-	cv::cvtColor(Input_image,lab_image,CV_RGB2Lab);
+	ORL_ConvertColor(Input_image, lab_image, cv::ColorConversionCodes::COLOR_RGB2Lab);
 	DUMP_IMAGE(Input_image,"/tmp/input.png");
-#endif
 
 
 #ifdef ENABLE_TEXTURE_TEST
-#if (CUDA_GPU)
-        gpu_in.upload(Input_image);
-        cv::gpu::cvtColor(gpu_in, gpu_out,CV_RGB2GRAY);
-        gpu_out.download(src_gray);
-#else 
-	cv::cvtColor(Input_image,src_gray,CV_RGB2GRAY);
-#endif // CUDA_GPU
+	ORL_ConvertColor(Input_image, src_gray, CV_RGB2GRAY);
 
 #if (USE_THREADS)
 
