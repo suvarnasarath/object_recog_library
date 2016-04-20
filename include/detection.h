@@ -6,7 +6,9 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
 #if (CUDA_GPU)
-#include "opencv2/gpu/gpu.hpp"
+#include "opencv2/cudaarithm.hpp"
+#include "opencv2/cudafilters.hpp"
+#include "opencv2/cudaimgproc.hpp"
 #endif
 #include <iostream>
 #include <vector>
