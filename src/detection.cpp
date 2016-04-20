@@ -761,10 +761,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 	double computed_area_in_pixels, height, dist, expected_area_in_pixels;
 	double min_expected_size,max_expected_size;
 
-#if(USE_HSV_SPACE)
-	generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
-    							registered_sample[index].channel3,heat_map,image_planes);
-#elif(USE_LAB_SPACE)
+#if(USE_LAB_SPACE)
 	generate_heat_map_LAB(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
         							registered_sample[index].channel3,heat_map,image_planes);
 #endif
