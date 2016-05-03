@@ -45,21 +45,16 @@ void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S
 int main(int argc, char **argv)
 {
 	// Turn off debug messages.
-	set_debug(OFF);
-
-	// Enable samples: Only white sample is enabled by default
-	//std::vector<bool> filter{true,true,false,false};
-	//set_sample_filter(filter);
-
+	set_debug(VERBOSE);
 
 	/*******************************/
 	/******** Register camera ******/
 	/*******************************/
 	platform_camera_parameters param;
-	param.height = 0.90305;   						// height of the camera from ground plane
-	param.pitch = 0.6283185307179586 // 0.593411945678072; 	// Pitch angle of the camera (up from down)
-	param.HFov = 1.3962634;   						// Horizontal field of view
-	param.VFov = 0.7853981625;					// Vertical field of view
+	param.height = 0.90305;   						 // height of the camera from ground plane
+	param.pitch = 0.6283185307179586; // 0.593411945678072; 	// Pitch angle of the camera (up from down)
+	param.HFov = 1.3962634;   						 // Horizontal field of view
+	param.VFov = 0.7853981625;					 // Vertical field of view
 	param.Hpixels = 960;
 	param.Vpixels = 720;
 	param.max_detection_dist = 5.0;
@@ -76,45 +71,16 @@ int main(int argc, char **argv)
 	/*
 	 * White
 	 */
-	std::vector<double>L{200,55,0.6};			 //{Origin,Deviation,Weight}
-	std::vector<double>a{128,20,0.1};			 //{Origin,Deviation,Weight}
-	std::vector<double>b{128,30,0.3};			 //{Origin,Deviation,Weight}
-	std::vector<double>width{0.0685,0.01, 0.06}; //{width,min,max}
-	std::vector<double>depth{0.0635,0.01, 0.03}; //{height,min,max}
+	std::vector<double>L{200,55,0.6};			 				//{Origin,Deviation,Weight}
+	std::vector<double>a{128,20,0.1};			 				//{Origin,Deviation,Weight}
+	std::vector<double>b{128,30,0.3};			 				//{Origin,Deviation,Weight}
+	std::vector<double>width{0.0685,0.01, 0.06}; 	//{width,min,max}
+	std::vector<double>depth{0.0635,0.01, 0.03}; 	//{height,min,max}
 	register_sample(WHITE,L,a,b,width,depth);
 
-	/*
-	 * Red
+	// Todo: Add purple rock
 
-	std::vector<double>L_red{163,40,0.2};
-	std::vector<double>a_red{200,40,0.55};
-	std::vector<double>b_red{128,10,0.25};
-	std::vector<double>width_red{0.0285,0.01,0.09};
-	std::vector<double>depth_red{0.0235,0.02,0.03};
-	register_sample(RED,L_red,a_red,b_red,width_red,depth_red);
-*/
-	/*
-	 * Yellow
-	 *
-	std::vector<double>L_yellow{160,40,0.34};
-	std::vector<double>a_yellow{128,20,0.33};
-	std::vector<double>b_yellow{180,10,0.33};
-	std::vector<double>width_yellow{0.02,0.3};
-	std::vector<double>depth_yellow{MIN_DEPTH,MAX_DEPTH};
-	register_sample(3,L_yellow,a_yellow,b_yellow,width_yellow,depth_yellow);
 
-	/*
-	 * Orange
-	 *
-	std::vector<double>L_orange{160,20,0.34};
-	std::vector<double>a_orange{160,20,0.33};
-	std::vector<double>b_orange{160,20,0.33};
-	std::vector<double>width_orange{0.02,0.3};
-	std::vector<double>depth_orange{MIN_DEPTH,MAX_DEPTH};
-	double pixel_dist_factor_orange = 6000;
-	register_sample(4,L_orange,a_orange,b_orange,width_orange,depth_orange);
-*/
-#endif
 	/********************************/
 	/********* Ros node handle ******/
 	/********************************/

@@ -4,17 +4,16 @@
 #include <stdio.h>
 
 //#define DEBUG_DUMP
-#define USE_GLOBAL_THRESHOLD  	(1)
-#define USE_ADAPTIVE_THRESHOLD	(!USE_GLOBAL_THRESHOLD)
-#define USE_HSV_SPACE		(0)
-#define USE_LAB_SPACE		(!USE_HSV_SPACE)
+#define USE_GLOBAL_THRESHOLD  		(1)
+#define USE_ADAPTIVE_THRESHOLD		(!USE_GLOBAL_THRESHOLD)
 #define USE_MORPHOLOGICAL_OPS 	(1)
-#define ENABLE_DEPTH_TEST	(0)
-#define ENABLE_TEXTURE_TEST	(1)
-#define ENABLE_TIMING		(1)
-#define ENABLE_RESIZING		(0)
-#define USE_THREADS  (1)
+#define ENABLE_TEXTURE_TEST				(1)
+#define ENABLE_TIMING								(1)
+#define USE_THREADS  									(1)
 
+// Maximum/Minimum distance the detector will detect samples - any detections outside this range are not considered
+#define MAX_DISTANCE_DETECTION			5.5
+#define MIN_DISTANCE_DETECTION			0.5
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
 // At the current pitch, tray is in the way causing reflections and thus false detections.
@@ -230,18 +229,6 @@ void precompute_world_lookup(unsigned int cameraId)
 	}
 }
 
-std::vector<double> log_transform(std::vector<double> &in)
-{
-	std::vector<double>out(in.size(),0);
-	std::vector<double>::iterator it;
-	for(it=in.begin();it!=in.end();++it)
-	{
-		*it = LOG_TRANSF(*it);
-		out.push_back(*it);
-	}
-	return out;
-}
-
 /*
  * registers a sample to the database
  */
@@ -325,8 +312,7 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 		index = pos.u*camera_parameters[cameraId].Vpixels + pos.v;
 		world_pos = WORLD_LOOKUP[index];
 	} else {
-		if(bPrintDebugMsg > DEBUG)
-			std::cout << "pixel out of range: check camera parameters "<< std::endl;
+		if(bPrintDebugMsg > DEBUG)		std::cout << "pixel out of range: check camera parameters "<< std::endl;
 	}
 	return world_pos;
 }
@@ -533,8 +519,6 @@ void generate_heat_map_LAB(cv::Mat &in_lab,const channel_info & L_info,
 
 void getPixelCount(unsigned int camera_index, unsigned int sample_index, double Dist2Sample, double &min_size, double &max_size)
 {
-
-	float min_sample_size_pixels,max_sample_size_pixels;
 	double K1 =  camera_parameters[camera_index].Hpixels/1.4;
 	double K2 = camera_parameters[camera_index].Vpixels/0.7;
 
@@ -555,7 +539,7 @@ void getPixelCount(unsigned int camera_index, unsigned int sample_index, double 
 	min_size = 4*K1*K2 * min_width_angle * min_height_angle ;
 	max_size = 4*K1*K2 * max_width_angle * max_height_angle ;
 
-	if (bPrintDebugMsg > ERROR)
+	if (bPrintDebugMsg > VERBOSE)
 	{
 		std::cout << "K1: " << K1 << std::endl;
 		std::cout << "K2: " << K2 << std::endl;
@@ -563,12 +547,9 @@ void getPixelCount(unsigned int camera_index, unsigned int sample_index, double 
 
 		std::cout << "width: "<< width << std::endl;
 		std::cout << "height: "<< height << std::endl;
-		std::cout << "min_width_angle: " << min_width_angle << std::endl;
-		std::cout << "min_height_angle: " << min_height_angle << std::endl;
-		std::cout << "max_width_angle: " << max_width_angle << std::endl;
-		std::cout << "max_height_angle: " << max_height_angle << std::endl;
-		std::cout << "min_sample_size_pixels: " << min_sample_size_pixels << std::endl;
-		std::cout << "max_sample_size_pixels: " << max_sample_size_pixels << std::endl;
+
+		std::cout << "expected min_size: " << min_size << std::endl;
+		std::cout << "expected min_size: " << min_size << std::endl;
 	}
 }
 
@@ -578,37 +559,44 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,
 				   std::vector<cv::Mat> &image_planes)
 {    
+
+    // Define cv::Mat structures to work with
+#if (CUDA_GPU)
+    cv::gpu::GpuMat gpu_in, gpu_in2, gpu_erode, gpu_dilate, gpu_out;
+#else
+    cv::Mat heat_map, erosion_dst, dilation_dst;
+#endif
+
+    // define vectors of contour points
+    std::vector<std::vector<cv::Point> > contours;
+    std::vector<cv::Vec4i> hierarchy;
+
+    // define variables
+    double computed_area_in_pixels, height, dist, expected_area_in_pixels, min_expected_size, max_expected_size;
+
+    // Struct to hold any detected samples
 	DETECTED_SAMPLE sample;
 
 	if(bPrintDebugMsg > DEBUG)
 		std::cerr << "*******************************" << std::endl;
 
-	PIXEL pxl_cntr_btm, pxl_left_btm , pxl_right_btm, pxl_left_tp,pxl_right_tp, pxl_cntr_tp;
+	PIXEL pxl_cntr_btm,  pxl_left_btm , pxl_right_btm, pxl_left_tp,pxl_right_tp, pxl_cntr_tp;
 	WORLD world_cntr_btm, world_left_btm, world_right_btm,world_left_tp,world_right_tp, world_cntr_tp;
 
 	// sample index is same for all samples this call
 	sample.id = index;
 
-    cv::Mat heat_map, erosion_dst, dilation_dst;
-#if (CUDA_GPU)
-    cv::gpu::GpuMat gpu_in, gpu_in2, gpu_erode, gpu_dilate, gpu_out;
-#endif
-
-    std::vector<std::vector<cv::Point> > contours;
-    std::vector<cv::Vec4i> hierarchy;
-    double computed_area_in_pixels, height, dist, expected_area_in_pixels;
-    double min_expected_size,max_expected_size;
-
-#if(USE_HSV_SPACE)
-    generate_heat_map_in_HSV(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
-    							registered_sample[index].channel3,heat_map,image_planes);
-#elif(USE_LAB_SPACE)
-    generate_heat_map_LAB(image_hsv,registered_sample[index].channel1,registered_sample[index].channel2,
-        							registered_sample[index].channel3,heat_map,image_planes);
-#endif
+	// Generate heat map in Lab color space
+    generate_heat_map_LAB(image_hsv,
+    														 registered_sample[index].channel1,
+    														 registered_sample[index].channel2,
+    														 registered_sample[index].channel3,
+    														 heat_map,
+    														 image_planes);
 
     DUMP_IMAGE(heat_map,"/tmp/heat_map.png");
 
+    // Make sure that texture map is already computed and ready to use here
     if(texture_out.data)
     {
 #if (CUDA_GPU)
@@ -623,25 +611,28 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 			cv::multiply(texture_out,heat_map,heat_map,1/255.0,CV_32FC1);
 		}
 #endif
-    } else {
+    }
+    else  // No texture map available.
+    {
     	std::cout << " no texture map" << std::endl;
     }
+
     DUMP_IMAGE(heat_map,"/tmp/heat_map_mul.png");
 
 #if(USE_GLOBAL_THRESHOLD)
 
-#if (CUDA_GPU)
-    cv::gpu::threshold(gpu_out, gpu_out,140,255,CV_THRESH_BINARY);
-    gpu_out.download(heat_map); 
-#else
-    cv::threshold(heat_map,heat_map,140,255,CV_THRESH_BINARY);
-#endif
-    heat_map.convertTo(heat_map, CV_8UC1);
-
+	#if (CUDA_GPU)
+		cv::gpu::threshold(gpu_out, gpu_out,140,255,CV_THRESH_BINARY);
+		gpu_out.download(heat_map);
+	#else
+		cv::threshold(heat_map,heat_map,140,255,CV_THRESH_BINARY);
+	#endif
+		heat_map.convertTo(heat_map, CV_8UC1);
 #elif(USE_ADAPTIVE_THRESHOLD)
     heat_map.convertTo(heat_map, CV_8UC1);
     cv::adaptiveThreshold(heat_map,heat_map,255,cv::ADAPTIVE_THRESH_MEAN_C,CV_THRESH_BINARY,151,-35);
-#endif
+#endif // USE_GLOBAL_THRESHOLD
+
     DUMP_IMAGE(heat_map,"/tmp/thresh_heat_map.png");
 
 
@@ -656,9 +647,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		cv::erode(heat_map,erosion_dst,erosion_element);
 		cv::dilate(erosion_dst,heat_map,dilation_element);
 	#endif  // CUDA
-		//DUMP_IMAGE(erosion_dst,"/tmp/erosion_out.png"); // No GPU download
 		DUMP_IMAGE(heat_map,"/tmp/dilation_out.png");
-
 #endif //USE_MORPHOLOGICAL_OPS
 
     // Find contours in the thresholded image to determine shapes
@@ -673,28 +662,38 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     std::vector<std::vector<cv::Point> > contours_poly( contours.size() );
     std::vector<cv::Rect> boundRect(contours.size() );
 
-    for( int i = 0; i < contours.size(); ++i)
+    /*
+     * Loop through all the contours and eliminate those that do not match various constraints
+     * 1. Reject contours that do not pass area(size) check - we know that the sample is of a certain area
+     * 2. Reject contours that do not pass distance check -  we know that the sample cannot be at unreal distances from the robot
+     */
+    for( int contourindex = 0;  contourindex < contours.size();  ++contourindex)
      {
-    	const std::vector<cv::Point> & countour = contours_poly[i];
+    	const std::vector<cv::Point> & countour = contours_poly[contourindex];
 
-        cv::approxPolyDP( cv::Mat(contours[i]), contours_poly[i], 10.0, false );
-        boundRect[i] = cv::boundingRect( cv::Mat(contours_poly[i]) );
+        cv::approxPolyDP( cv::Mat(contours[contourindex]), contours_poly[contourindex], 10.0, false );
+        boundRect[contourindex] = cv::boundingRect( cv::Mat(contours_poly[contourindex]) );
 
          // Get the pixel coordinates of the rectangular bounding box
-        cv::Point tl = boundRect[i].tl();
-        cv::Point br = boundRect[i].br();
+        cv::Point tl = boundRect[contourindex].tl();
+        cv::Point br = boundRect[contourindex].br();
+
         // Mid point of the bounding box bottom side
         pxl_cntr_btm.u = (tl.x + br.x)/2;
         pxl_cntr_btm.v = br.y;
+
         // Left point of the bounding box bottom side
         pxl_left_btm.u = tl.x;
         pxl_left_btm.v = br.y;
+
         // Right point of the bounding box bottom side
         pxl_right_btm.u = br.x;
         pxl_right_btm.v = br.y;
+
         // Left point of the bounding box top
         pxl_left_tp.u = tl.x;
         pxl_left_tp.v = tl.y;
+
         // Right point of the bounding box top
         pxl_right_tp.u = br.x;
         pxl_right_tp.v = tl.y;
@@ -722,30 +721,25 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         dist = std::max(std::sqrt(sample.x*sample.x + sample.y*sample.y +
         		 	 	 	 	  camera_parameters[camera_index].height*camera_parameters[camera_index].height),0.5);
 
-        if(dist > 4.0 || dist < 0.5)
+        if(dist > MAX_DISTANCE_DETECTION || dist < MIN_DISTANCE_DETECTION)
         {
-        	if (bPrintDebugMsg > DEBUG)
-        	       std::cout << "Too far or too close"<< std::endl;
+        	if (bPrintDebugMsg > DEBUG)  std::cout << "Too far or too close"<< std::endl;
         	continue;
         }
+
         // Compute sample size
        	getPixelCount(camera_index, index,dist,min_expected_size,max_expected_size);
-       	computed_area_in_pixels = cv::contourArea(contours[i]);
+       	computed_area_in_pixels = cv::contourArea(contours[contourindex]);
 
-        if((computed_area_in_pixels > min_expected_size) && (computed_area_in_pixels < max_expected_size)
-#if ENABLE_DEPTH_TEST
-        		&&
-           (sample.projected_depth > registered_sample[index].min_depth &&
-        	sample.projected_depth < registered_sample[index].max_depth)
-#endif
-        	)
+        if((computed_area_in_pixels > min_expected_size) && (computed_area_in_pixels < max_expected_size)	)
         {
 			// Push the sample
 			detected_samples.push_back(sample);
 
-			if (out_image != NULL) {
+			if (out_image != NULL)
+			{
 				// store bounding boxes to draw later
-				BB_Points.push_back(boundRect[i]);
+				BB_Points.push_back(boundRect[contourindex]);
 
 		        // Log all the positions
 		        if(bPrintDebugMsg > DEBUG)
@@ -776,7 +770,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 					std::cout << "computed_area_in_pixels: "<<computed_area_in_pixels << std::endl;
 				}
 			} else {
-				if (bPrintDebugMsg > OFF)std::cout << "Invalid output image pointer" << std::endl;
+				if (bPrintDebugMsg > OFF)  std::cout << "Invalid output image pointer" << std::endl;
 			}
 		} else {
 			if (bPrintDebugMsg > DEBUG)
@@ -803,6 +797,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	double t = (double)cv::getTickCount();
 #endif
 
+	// Initialise the library if not already done
 	if(!bInit)
 	{
 		Initialize_lib();
@@ -815,13 +810,8 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		return;
 	}
 
-#if ENABLE_RESIZING
-	src_rescaled = *imgPtr;
-	// Reduce input image resolution to speed up processing.
-	cv::resize(src_rescaled,Input_image,cv::Size(camera_parameters[camera_index].Hpixels,camera_parameters[camera_index].Vpixels),0,0,cv::INTER_LINEAR);
-#else
+	// Global mat structure to work with
 	Input_image = *imgPtr;
-#endif //ENABLE_RESIZING
 
 	// Add ROI to the image
 	if(camera_index >= 0 && camera_index < MAX_CAMERAS_SUPPORTED)
@@ -857,12 +847,9 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 #endif // CUDA_GPU
 
 #if (USE_THREADS)
-
-	// Create thread
+	 // Create thread to handle texture image
 	pthread_t texture_thread;
 	pthread_create(&texture_thread,NULL,&GetTextureImageThread,&src_gray);
-
-
 #else
 	GetTextureImage(src_gray,texture_out);
 #endif
@@ -872,6 +859,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	// Clear detected_samples structure before filling in with new data
 	detected_samples.clear();
 
+	// Create 3 Mat structures to hold each plane of Lab color space
 	cv::Mat channel1 = cv::Mat::zeros(Input_image.rows,Input_image.rows,1);
 	cv::Mat channel2 = cv::Mat::zeros(Input_image.rows,Input_image.rows,1);
 	cv::Mat channel3 = cv::Mat::zeros(Input_image.rows,Input_image.rows,1);
@@ -895,6 +883,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	{
 		if(registered_sample[index].isValid)
 		{
+			// Todo: this will have to be a different thread for different index
 			process_image(camera_index,lab_image, out_image,index,detected_samples,image_planes);
 		}
 	}
@@ -904,10 +893,6 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	{
 		rectangle(Input_image, BB_Points[index].tl(), BB_Points[index].br(),(0, 0, 255), 2, 8, 0);
 	}
-
-#if (USE_THREADS)
-	//pthread_join(texture_thread,NULL);
-#endif
 
 	// Clear the samples for next iteration
 	BB_Points.clear();
