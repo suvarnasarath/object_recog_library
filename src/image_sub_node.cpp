@@ -56,12 +56,12 @@ int main(int argc, char **argv)
 	/******** Register camera ******/
 	/*******************************/
 	platform_camera_parameters param;
-	param.height = 0.76385;   // height of the camera from ground plane
-	param.pitch = 0.593411945678072;//0.366;      // Pitch angle of the camera (up from down)
-	param.HFov = 1.3962634;   // Horizontal field of view
-	param.VFov = 0.7853981625;// Vertical field of view
-	param.Hpixels = 960; //1920;
-	param.Vpixels = 720; //1080;
+	param.height = 0.90305;   						// height of the camera from ground plane
+	param.pitch = 0.6283185307179586 // 0.593411945678072; 	// Pitch angle of the camera (up from down)
+	param.HFov = 1.3962634;   						// Horizontal field of view
+	param.VFov = 0.7853981625;					// Vertical field of view
+	param.Hpixels = 960;
+	param.Vpixels = 720;
 	param.max_detection_dist = 5.0;
 	param.x_offset = 0.0;
 	param.y_offset = 0.0;
@@ -73,19 +73,6 @@ int main(int argc, char **argv)
 	/******** Register samples ******/
 	/********************************/
 
-#ifdef SIMULATOR  // Gazebo has some weirdness that I still needs to be figure.
-	/*
-	 * White
-	 */
-	std::vector<double>L{235,20,0.40};
-	std::vector<double>a{128,20,0.30};
-	std::vector<double>b{128,20,0.30};
-	std::vector<double>width{0.03,1.5};
-	std::vector<double>depth{0.05,4.6};
-
-	double pixel_dist_factor_white = 6000;
-	register_sample(1,L,a,b,width,depth);
-#else
 	/*
 	 * White
 	 */
