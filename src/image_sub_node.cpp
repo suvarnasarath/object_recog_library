@@ -28,20 +28,6 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 	  }
 }
 
-#if 0
-void AddSampleforDetection(int id, int H_min,int S_min,int V_min,int H_max,int S_max,int V_max,
-		int H_origin,int S_origin,int V_origin,double min_width, double max_width,double min_height,double max_height,
-		double H_weight,double S_weight,double V_weight)
-{
-	std::vector<int> hue_detection_range{H_max,H_origin,H_min};
-    std::vector<int> sat_detection_range{S_max,S_origin,S_min};
-    std::vector<int> val_detection_range{V_max,V_origin,V_min};
-    std::vector<double> hsv_weights{H_weight,S_weight,V_weight};
-    register_sample(id,hue_detection_range,sat_detection_range,val_detection_range,
-    				hsv_weights,min_width,max_width,min_height,max_height);
-}
-#endif
-
 int main(int argc, char **argv)
 {
 	// Turn off debug messages.
