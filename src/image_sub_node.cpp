@@ -58,6 +58,7 @@ int main(int argc, char **argv)
 	 * White
 	 */
 	std::vector<double>L{200,55,0.6};			 				//{Origin,Deviation,Weight}
+	//std::vector<double>L{150,55,0.6};			 				//{Origin,Deviation,Weight}
 	std::vector<double>a{128,20,0.1};			 				//{Origin,Deviation,Weight}
 	std::vector<double>b{128,30,0.3};			 				//{Origin,Deviation,Weight}
 	std::vector<double>width{0.0685,0.01, 0.06}; 	//{width,min,max}

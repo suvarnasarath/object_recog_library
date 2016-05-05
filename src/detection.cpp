@@ -553,6 +553,25 @@ void getPixelCount(unsigned int camera_index, unsigned int sample_index, double 
 	}
 }
 
+/*
+ * We know that shape of some of the samples so try to eliminate unexpected shapes
+ * @ID: sample ID
+ * @ Height: width of the sample
+ * @ Width : width of the sample
+ * Returns true if theheight and width are within bounds
+ */
+bool Apply_shape_constraints(unsigned int ID, double width, double height )
+{
+	if(ID == WHITE) { // We know that the pre-cashed sample is cylindrical with height > width
+		if(width < height)
+			return true;
+		else
+			return false;
+	} else { // no information on other sample for now
+		return true;
+	}
+}
+
 std::vector<cv::Rect> BB_Points;
 
 bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image,
@@ -717,6 +736,14 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
         sample.projected_depth = std::abs(world_cntr_tp.x - world_cntr_btm.x);
 
+#if 0
+        if(!Apply_shape_constraints(sample.id, sample.projected_width, sample.projected_depth))
+        {
+        	// did not pass shape constraints. Skip this contour
+        	continue;
+        }
+#endif
+
         // Compute sample distance
         dist = std::max(std::sqrt(sample.x*sample.x + sample.y*sample.y +
         		 	 	 	 	  camera_parameters[camera_index].height*camera_parameters[camera_index].height),0.5);
@@ -746,12 +773,14 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		        {
 					std::cout << "TL: "<<tl.x << " "<< tl.y << std::endl;
 					std::cout << "BR: "<<br.x << " "<< br.y << std::endl;
+
 					// Pixel coordinates in Image frame
 					std::cout << "pxl_cntr_btm:("<< pxl_cntr_btm.u <<","<< pxl_cntr_btm.v << ")"<<std::endl;
 					std::cout << "pxl_left_btm:("<< pxl_left_btm.u <<","<< pxl_left_btm.v <<")" <<std::endl;
 					std::cout << "pxl_right_btm:("<< pxl_right_btm.u <<","<< pxl_right_btm.v <<")" <<std::endl;
 					std::cout << "pxl_left_tp:("<< pxl_left_tp.u <<","<< pxl_left_tp.v <<")"<<std::endl;
 					std::cout << "pxl_right_tp:("<< pxl_right_tp.u <<" , "<< pxl_right_tp.v <<")" <<std::endl;
+
 					// Pixel coordinates in World frame
 		        	std::cout << "world_cntr_tp:("<<  world_cntr_tp.x <<","<< world_cntr_tp.y <<")" << std::endl;
 		        	std::cout << "world_left_tp:("<<  world_left_tp.x <<","<< world_left_tp.y <<")" << std::endl;
@@ -759,11 +788,14 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		        	std::cout << "world_cntr_btm:("<<  world_cntr_btm.x <<","<< world_cntr_btm.y <<")" << std::endl;
 					std::cout << "world_left_btm:("<<  world_left_btm.x <<"," << world_left_btm.y <<")" << std::endl;
 					std::cout << "world_right_btm:( "<<  world_right_btm.x <<"," << world_right_btm.y <<")" << std::endl;
+
 					// Sample world position
 					std::cout << "sample:(" << sample.x  <<","<< sample.y  <<")" <<std::endl;
+
 					// Sample width and depth in world
 					std::cout << "sample width:  " << sample.projected_width<< std::endl;
 					std::cout << "sample depth:  " << sample.projected_depth<< std::endl;
+
 					// Area
 					std::cout << "min_expected_area_in_pixels: "<<min_expected_size << std::endl;
 					std::cout << "max_expected_area_in_pixels: "<<max_expected_size <<std::endl;
@@ -775,6 +807,7 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		} else {
 			if (bPrintDebugMsg > DEBUG)
 			{
+
 				if(expected_area_in_pixels < registered_sample[index].min_width)
 					std::cout << "detected a small sample" << std::endl;
 				else if(expected_area_in_pixels > registered_sample[index].max_width)
