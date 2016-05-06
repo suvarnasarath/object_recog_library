@@ -398,6 +398,9 @@ cv::Mat src_gray,texture_out;
 void *GetTextureImageThread(void * gray)
 {
 
+#if (CUDA_GPU)
+	cv::gpu::GpuMat gpu_in, gpu_in2, gpu_out;
+#endif
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
 	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
@@ -408,30 +411,64 @@ void *GetTextureImageThread(void * gray)
 	int kern = 7;
 
 	/// Gradient X
+#if (CUDA_GPU)
+	gpu_in.upload( src_gray);
+	cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 1, 0, kern, scale, cv::BORDER_DEFAULT);
+	gpu_out.download(grad_x);
+#else
 	cv::Sobel( src_gray, grad_x, ddepth, 1, 0, kern, scale, delta, cv::BORDER_DEFAULT );
+#endif
 	cv::convertScaleAbs( grad_x, abs_grad_x );
 
 	/// Gradient Y
+#if (CUDA_GPU)
+	gpu_in.upload( src_gray);
+	cv::gpu::Sobel(gpu_in, gpu_out, ddepth, 0, 1, kern, scale, cv::BORDER_DEFAULT);
+	gpu_out.download(grad_y);
+#else
 	cv::Sobel( src_gray, grad_y, ddepth, 0, 1, kern, scale, delta, cv::BORDER_DEFAULT );
+#endif
 	cv::convertScaleAbs( grad_y, abs_grad_y );
 
 	/// Total Gradient (approximate)
+#if (CUDA_GPU)
+	gpu_in.upload(abs_grad_x);
+	gpu_in2.upload(abs_grad_y);
+	cv::gpu::addWeighted( gpu_in, 0.5, gpu_in2, 0.5, 0, gpu_out );
+	gpu_out.download(texture_out);
+#else
 	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, texture_out );
+#endif
+	DUMP_IMAGE(dst,"/tmp/texture_derivative_out.png");
 
+
+#if (CUDA_GPU&0)
+	cv::gpu::boxFilter(gpu_in, gpu_out,-1, cv::Size(39,39));
+	gpu_out.download(smoothed_image);
+#else
 	cv::medianBlur(texture_out,smoothed_image,39);
+#endif
+	DUMP_IMAGE(smoothed_image,"/tmp/texture_median_out.png");
 
 	cv::normalize(smoothed_image,normalized_image,1.0,255.0,cv::NORM_MINMAX);
+	DUMP_IMAGE(normalized_image,"/tmp/texture_normalised_out.png");
 
 	cv::subtract(255.0,normalized_image,texture_out);
 
-	cv::erode(texture_out,erosion_dst,erosion_element);
-	cv::dilate(erosion_dst,texture_out,dilation_element);
-
+#if (USE_MORPHOLOGICAL_OPS)
+	#if (CUDA_GPU)
+		gpu_in.upload(texture_out);
+		cv::gpu::erode(gpu_in, gpu_in2, erosion_element);
+		cv::gpu::dilate(gpu_in2, gpu_out, dilation_element);
+		gpu_in2.download(erosion_dst);
+		gpu_out.download(texture_out);
+	#else
+		cv::erode(texture_out,erosion_dst,erosion_element);
+		cv::dilate(erosion_dst,texture_out,dilation_element);
+	#endif // CUDA
+#endif //USE_MORPHOLOGICAL_OPS
 	DUMP_IMAGE(texture_out,"/tmp/texture_out_thread.png");
-
-
 	pthread_exit(NULL);
-
 }
 #endif
 
@@ -558,13 +595,14 @@ std::vector<cv::Rect> BB_Points;
 bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image,
 				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,
 				   std::vector<cv::Mat> &image_planes)
-{    
+{
 
+	cv::Mat heat_map;
     // Define cv::Mat structures to work with
 #if (CUDA_GPU)
     cv::gpu::GpuMat gpu_in, gpu_in2, gpu_erode, gpu_dilate, gpu_out;
 #else
-    cv::Mat heat_map, erosion_dst, dilation_dst;
+    cv::Mat erosion_dst, dilation_dst;
 #endif
 
     // define vectors of contour points
@@ -780,11 +818,9 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		} else {
 			if (bPrintDebugMsg > DEBUG)
 			{
-
-				if(expected_area_in_pixels < registered_sample[index].min_width)
-					std::cout << "detected a small sample" << std::endl;
-				else if(expected_area_in_pixels > registered_sample[index].max_width)
-					std::cout << "detected a large sample" << std::endl;
+				std::cout << "measured area: " << computed_area_in_pixels		<< " "
+									 << "min  area: " 				<< min_expected_size					<< " "
+									 << "max  area: " 			<<max_expected_size					<< " "				<< std::endl;
 			}
 		}
 	}
