@@ -553,25 +553,6 @@ void getPixelCount(unsigned int camera_index, unsigned int sample_index, double 
 	}
 }
 
-/*
- * We know that shape of some of the samples so try to eliminate unexpected shapes
- * @ID: sample ID
- * @ Height: width of the sample
- * @ Width : width of the sample
- * Returns true if theheight and width are within bounds
- */
-bool Apply_shape_constraints(unsigned int ID, double width, double height )
-{
-	if(ID == WHITE) { // We know that the pre-cashed sample is cylindrical with height > width
-		if(width < height)
-			return true;
-		else
-			return false;
-	} else { // no information on other sample for now
-		return true;
-	}
-}
-
 std::vector<cv::Rect> BB_Points;
 
 bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image,
@@ -735,14 +716,6 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
         // Sample world position
         sample.projected_width = std::abs(world_right_btm.y - world_left_btm.y);
         sample.projected_depth = std::abs(world_cntr_tp.x - world_cntr_btm.x);
-
-#if 0
-        if(!Apply_shape_constraints(sample.id, sample.projected_width, sample.projected_depth))
-        {
-        	// did not pass shape constraints. Skip this contour
-        	continue;
-        }
-#endif
 
         // Compute sample distance
         dist = std::max(std::sqrt(sample.x*sample.x + sample.y*sample.y +
