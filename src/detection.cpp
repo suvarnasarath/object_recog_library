@@ -3,13 +3,13 @@
 #include <pthread.h>
 #include <stdio.h>
 
-//#define DEBUG_DUMP
+#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD  		(1)
 #define USE_ADAPTIVE_THRESHOLD		(!USE_GLOBAL_THRESHOLD)
-#define USE_MORPHOLOGICAL_OPS 	(1)
-#define ENABLE_TEXTURE_TEST				(1)
-#define ENABLE_TIMING								(1)
-#define USE_THREADS  									(1)
+#define USE_MORPHOLOGICAL_OPS 		(1)
+#define ENABLE_TEXTURE_TEST			(1)
+#define ENABLE_TIMING				(1)
+#define USE_THREADS  				(0)
 
 // Maximum/Minimum distance the detector will detect samples - any detections outside this range are not considered
 #define MAX_DISTANCE_DETECTION			5.5
@@ -439,7 +439,7 @@ void *GetTextureImageThread(void * gray)
 #else
 	cv::addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, texture_out );
 #endif
-	DUMP_IMAGE(dst,"/tmp/texture_derivative_out.png");
+	//DUMP_IMAGE(dst,"/tmp/texture_derivative_out.png");
 
 
 #if (CUDA_GPU&0)
@@ -594,7 +594,8 @@ std::vector<cv::Rect> BB_Points;
 
 bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image,
 				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,
-				   std::vector<cv::Mat> &image_planes)
+				   std::vector<cv::Mat> &image_planes,
+				   cv::Mat texture_img)
 {
 
 	cv::Mat heat_map;
@@ -635,19 +636,17 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
     DUMP_IMAGE(heat_map,"/tmp/heat_map.png");
 
     // Make sure that texture map is already computed and ready to use here
-    if(texture_out.data)
+    if(texture_img.data)
     {
 #if (CUDA_GPU)
-		gpu_in.upload(texture_out);
+		gpu_in.upload(texture_img);
 		gpu_in2.upload(heat_map);
 		gpu_in.convertTo(gpu_in, CV_32FC1);
 		gpu_in2.convertTo(gpu_in2, CV_32FC1);
 		cv::gpu::multiply(gpu_in, gpu_in2, gpu_out, 1/255.0,CV_32FC1);
 		gpu_out.download(heat_map);
 #else
-		if(registered_sample[index].Id == WHITE) {
-			cv::multiply(texture_out,heat_map,heat_map,1/255.0,CV_32FC1);
-		}
+			cv::multiply(texture_img,heat_map,heat_map,1/255.0,CV_32FC1);
 #endif
     }
     else  // No texture map available.
@@ -926,7 +925,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		if(registered_sample[index].isValid)
 		{
 			// Todo: this will have to be a different thread for different index
-			process_image(camera_index,lab_image, out_image,index,detected_samples,image_planes);
+			process_image(camera_index,lab_image, out_image,index,detected_samples,image_planes, texture_out);
 		}
 	}
 

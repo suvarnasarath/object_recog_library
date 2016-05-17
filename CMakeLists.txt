@@ -109,9 +109,7 @@ include_directories(
 )
 
 ## Declare a cpp library
- add_library(lib_object_recog
-   src/detection.cpp
- )
+ add_library(lib_object_recog  src/detection.cpp)
 
 ## Declare a cpp executable
 add_executable(object_recog_test src/image_sub_node.cpp)
