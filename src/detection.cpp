@@ -3,13 +3,13 @@
 #include <pthread.h>
 #include <stdio.h>
 
-#define DEBUG_DUMP
+//#define DEBUG_DUMP
 #define USE_GLOBAL_THRESHOLD  		(1)
 #define USE_ADAPTIVE_THRESHOLD		(!USE_GLOBAL_THRESHOLD)
 #define USE_MORPHOLOGICAL_OPS 		(1)
 #define ENABLE_TEXTURE_TEST			(1)
 #define ENABLE_TIMING				(1)
-#define USE_THREADS  				(0)
+#define USE_THREADS  				(1)
 
 // Maximum/Minimum distance the detector will detect samples - any detections outside this range are not considered
 #define MAX_DISTANCE_DETECTION			5.5
@@ -18,7 +18,7 @@
 // Number of row pixels to remove from the bottom of the image to create ROI.
 // At the current pitch, tray is in the way causing reflections and thus false detections.
 #define ROWS_TO_ELIMINATE_AT_BOTTOM (95)
-#define ROWS_TO_ELIMINATE_AT_TOP    (ROWS_TO_ELIMINATE_AT_BOTTOM)
+#define ROWS_TO_ELIMINATE_AT_TOP    		(35)
 
 #ifdef DEBUG_DUMP
 #define DUMP_IMAGE(IMG,FILE) cv::imwrite(FILE,IMG);
@@ -34,6 +34,17 @@
 #define THRESHOLD (0.5)
 
 #define CLOCKS_PER_MS   (CLOCKS_PER_SEC/1000)
+
+bool texture_ready = false;
+
+struct texture_struct{
+	cv::Mat in;
+	cv::Mat out;
+};
+
+pthread_t texture_thread;
+texture_struct texture_data;
+
 
 void Display_time(double  time_elapsed)
 {
@@ -317,7 +328,7 @@ WORLD get_world_pos(unsigned int cameraId, PIXEL &pos)
 	return world_pos;
 }
 
-void GetTextureImage(cv::Mat &src, cv::Mat &dst)
+void GetTextureImage(void* arguments)
 {
 #if (CUDA_GPU)
 	cv::gpu::GpuMat gpu_in, gpu_in2, gpu_out;
@@ -325,6 +336,10 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
 	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
+
+	struct texture_struct *args =(struct texture_struct *) arguments;
+	cv::Mat src = args->in;
+	cv::Mat dst = args->out;
 
 	int scale = 1;
 	int delta = 0;
@@ -392,11 +407,10 @@ void GetTextureImage(cv::Mat &src, cv::Mat &dst)
 }
 
 
-cv::Mat src_gray,texture_out;
-
 #if( USE_THREADS)
-void *GetTextureImageThread(void * gray)
+void *GetTextureImageThread(void * arguments)
 {
+	cv::Mat texture_out;
 
 #if (CUDA_GPU)
 	cv::gpu::GpuMat gpu_in, gpu_in2, gpu_out;
@@ -404,6 +418,9 @@ void *GetTextureImageThread(void * gray)
 	/// Generate grad_x and grad_y
 	cv::Mat grad_x, grad_y,smoothed_image, normalized_image;
 	cv::Mat abs_grad_x, abs_grad_y, erosion_dst, dilation_dst;
+
+	struct texture_struct *args =(struct texture_struct *) arguments;
+	cv::Mat src_gray = args->in;
 
 	int scale = 1;
 	int delta = 0;
@@ -468,7 +485,8 @@ void *GetTextureImageThread(void * gray)
 	#endif // CUDA
 #endif //USE_MORPHOLOGICAL_OPS
 	DUMP_IMAGE(texture_out,"/tmp/texture_out_thread.png");
-	pthread_exit(NULL);
+
+	args->out = texture_out;
 }
 #endif
 
@@ -590,13 +608,12 @@ void getPixelCount(unsigned int camera_index, unsigned int sample_index, double 
 	}
 }
 
-std::vector<cv::Rect> BB_Points;
-
 bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_image,
 				   int index,std::vector<DETECTED_SAMPLE> &detected_samples,
-				   std::vector<cv::Mat> &image_planes,
-				   cv::Mat texture_img)
+				   std::vector<cv::Mat> &image_planes)
 {
+
+	std::vector<cv::Rect> BB_Points;
 
 	cv::Mat heat_map;
     // Define cv::Mat structures to work with
@@ -635,24 +652,30 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     DUMP_IMAGE(heat_map,"/tmp/heat_map.png");
 
+#if (USE_THREADS)
+    pthread_join(texture_thread,NULL);
+#endif
+
+    cv::imwrite("/tmp/texture_out.png",texture_data.out);
     // Make sure that texture map is already computed and ready to use here
-    if(texture_img.data)
+    if(texture_data.out.data)
     {
 #if (CUDA_GPU)
-		gpu_in.upload(texture_img);
+		gpu_in.upload(texture_data.out);
 		gpu_in2.upload(heat_map);
 		gpu_in.convertTo(gpu_in, CV_32FC1);
 		gpu_in2.convertTo(gpu_in2, CV_32FC1);
 		cv::gpu::multiply(gpu_in, gpu_in2, gpu_out, 1/255.0,CV_32FC1);
 		gpu_out.download(heat_map);
 #else
-			cv::multiply(texture_img,heat_map,heat_map,1/255.0,CV_32FC1);
+			cv::multiply(texture_data.out,heat_map,heat_map,1/255.0,CV_32FC1);
 #endif
     }
     else  // No texture map available.
     {
     	std::cout << " no texture map" << std::endl;
     }
+
 
     DUMP_IMAGE(heat_map,"/tmp/heat_map_mul.png");
 
@@ -824,6 +847,15 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 		}
 	}
 
+	// draw bounding boxes on the input image
+	for (int index = 0; index < BB_Points.size(); ++index)
+	{
+		rectangle(Input_image, BB_Points[index].tl(), BB_Points[index].br(),(0, 0, 255), 2, 8, 0);
+	}
+
+	// Clear the samples for next iteration
+	BB_Points.clear();
+
     // Print the number of samples found
 	if(bPrintDebugMsg > DEBUG)
 		std::cout << "Number of samples found: "<< detected_samples.size() << std::endl;
@@ -837,7 +869,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	clock_t start_s=clock();
 	double t = (double)cv::getTickCount();
 #endif
-
+	texture_ready = false;
 	// Initialise the library if not already done
 	if(!bInit)
 	{
@@ -845,7 +877,7 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 		bInit = true;
 	}
 
-	cv::Mat lab_image,src_rescaled;
+	cv::Mat lab_image,src_rescaled,src_gray;
 	if(! imgPtr->data) {
 		std::cout << "ERROR: could not read image"<< std::endl;
 		return;
@@ -857,9 +889,8 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	// Add ROI to the image
 	if(camera_index >= 0 && camera_index < MAX_CAMERAS_SUPPORTED)
 	{
-		Input_image = Input_image(cv::Rect( 0,0,
-											Input_image.cols,
-											Input_image.rows - ROWS_TO_ELIMINATE_AT_BOTTOM));
+		Input_image = Input_image(cv::Rect( 0,										0,
+																						  Input_image.cols,	Input_image.rows - ROWS_TO_ELIMINATE_AT_BOTTOM));
 	} else {
 		std::cout << "ERROR: Unknown number of camera's registered "<< std::endl;
 		return;
@@ -877,7 +908,6 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	DUMP_IMAGE(Input_image,"/tmp/input.png");
 #endif
 
-
 #ifdef ENABLE_TEXTURE_TEST
 #if (CUDA_GPU)
         gpu_in.upload(Input_image);
@@ -887,12 +917,15 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	cv::cvtColor(Input_image,src_gray,CV_RGB2GRAY);
 #endif // CUDA_GPU
 
+	texture_data.in = src_gray;
+	//texture_data.out = cv::Mat::zeros( src_gray.size(),  src_gray.type() );
+
 #if (USE_THREADS)
 	 // Create thread to handle texture image
-	pthread_t texture_thread;
-	pthread_create(&texture_thread,NULL,&GetTextureImageThread,&src_gray);
+
+	pthread_create(&texture_thread,NULL,&GetTextureImageThread,&texture_data);
 #else
-	GetTextureImage(src_gray,texture_out);
+	GetTextureImage(&texture_data);
 #endif
 	DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
 #endif // ENABLE_TEXTURE_TEST
@@ -924,19 +957,10 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	{
 		if(registered_sample[index].isValid)
 		{
-			// Todo: this will have to be a different thread for different index
-			process_image(camera_index,lab_image, out_image,index,detected_samples,image_planes, texture_out);
+			process_image(camera_index,lab_image, out_image,index,detected_samples,image_planes);
 		}
 	}
 
-	// draw bounding boxes on the input image
-	for (int index = 0; index < BB_Points.size(); ++index)
-	{
-		rectangle(Input_image, BB_Points[index].tl(), BB_Points[index].br(),(0, 0, 255), 2, 8, 0);
-	}
-
-	// Clear the samples for next iteration
-	BB_Points.clear();
 	// Log image
 	DUMP_IMAGE(Input_image,"/tmp/BB.png");
 
