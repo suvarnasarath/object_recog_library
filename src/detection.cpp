@@ -12,7 +12,7 @@
 #define USE_THREADS  				(1)
 
 // Maximum/Minimum distance the detector will detect samples - any detections outside this range are not considered
-#define MAX_DISTANCE_DETECTION			5.5
+#define MAX_DISTANCE_DETECTION			4.5
 #define MIN_DISTANCE_DETECTION			0.5
 
 // Number of row pixels to remove from the bottom of the image to create ROI.
@@ -652,14 +652,14 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 
     DUMP_IMAGE(heat_map,"/tmp/heat_map.png");
 
+
 #if (USE_THREADS)
-    pthread_join(texture_thread,NULL);
+	pthread_join(texture_thread,NULL);
 #endif
 
-    cv::imwrite("/tmp/texture_out.png",texture_data.out);
-    // Make sure that texture map is already computed and ready to use here
-    if(texture_data.out.data)
-    {
+	// Make sure that texture map is already computed and ready to use here
+	if(texture_data.out.data && sample.id == WHITE)
+	{
 #if (CUDA_GPU)
 		gpu_in.upload(texture_data.out);
 		gpu_in2.upload(heat_map);
@@ -670,14 +670,9 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 #else
 			cv::multiply(texture_data.out,heat_map,heat_map,1/255.0,CV_32FC1);
 #endif
-    }
-    else  // No texture map available.
-    {
-    	std::cout << " no texture map" << std::endl;
-    }
+	}
 
-
-    DUMP_IMAGE(heat_map,"/tmp/heat_map_mul.png");
+	DUMP_IMAGE(heat_map,"/tmp/heat_map_mul.png");
 
 #if(USE_GLOBAL_THRESHOLD)
 
@@ -791,7 +786,8 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
        	getPixelCount(camera_index, index,dist,min_expected_size,max_expected_size);
        	computed_area_in_pixels = cv::contourArea(contours[contourindex]);
 
-        if((computed_area_in_pixels > min_expected_size) && (computed_area_in_pixels < max_expected_size)	)
+        if((computed_area_in_pixels > min_expected_size && computed_area_in_pixels < max_expected_size)
+        		|| sample.id == PURPLE)  // forgive purple rock for size constraints for now
         {
 			// Push the sample
 			detected_samples.push_back(sample);
@@ -842,16 +838,27 @@ bool process_image(unsigned int camera_index,cv::Mat image_hsv,cv::Mat *out_imag
 			{
 				std::cout << "measured area: " << computed_area_in_pixels		<< " "
 									 << "min  area: " 				<< min_expected_size					<< " "
-									 << "max  area: " 			<<max_expected_size					<< " "				<< std::endl;
+									 << "max  area: " 			<<max_expected_size					<< " "
+									 << "Sample: " 					<<sample.id					<< " "				<< std::endl;
 			}
 		}
 	}
 
+    cv::Scalar color;
 	// draw bounding boxes on the input image
 	for (int index = 0; index < BB_Points.size(); ++index)
 	{
-		rectangle(Input_image, BB_Points[index].tl(), BB_Points[index].br(),(0, 0, 255), 2, 8, 0);
+		if(sample.id == WHITE) {
+			 color = (0,0,255);
+		} else if(sample.id == PURPLE) {
+			color = (255,0,0);
+		}
+
+		rectangle(Input_image, BB_Points[index].tl(), BB_Points[index].br(),color, 2, 8, 0);
+		//cv::drawContours(Input_image,contours,index,(255,0,0),1,8,hierarchy);
 	}
+
+
 
 	// Clear the samples for next iteration
 	BB_Points.clear();
@@ -889,8 +896,8 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 	// Add ROI to the image
 	if(camera_index >= 0 && camera_index < MAX_CAMERAS_SUPPORTED)
 	{
-		Input_image = Input_image(cv::Rect( 0,										0,
-																						  Input_image.cols,	Input_image.rows - ROWS_TO_ELIMINATE_AT_BOTTOM));
+		Input_image = Input_image(cv::Rect(0									   ,    0,
+																						  Input_image.cols, 	 Input_image.rows - ROWS_TO_ELIMINATE_AT_BOTTOM));
 	} else {
 		std::cout << "ERROR: Unknown number of camera's registered "<< std::endl;
 		return;
@@ -918,16 +925,13 @@ void find_objects(unsigned int camera_index,const cv::Mat *imgPtr, cv::Mat *out_
 #endif // CUDA_GPU
 
 	texture_data.in = src_gray;
-	//texture_data.out = cv::Mat::zeros( src_gray.size(),  src_gray.type() );
 
 #if (USE_THREADS)
 	 // Create thread to handle texture image
-
 	pthread_create(&texture_thread,NULL,&GetTextureImageThread,&texture_data);
 #else
 	GetTextureImage(&texture_data);
 #endif
-	DUMP_IMAGE(texture_out,"/tmp/texture_out.png");
 #endif // ENABLE_TEXTURE_TEST
 
 	// Clear detected_samples structure before filling in with new data

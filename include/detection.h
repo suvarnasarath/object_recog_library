@@ -19,7 +19,11 @@
 
 typedef enum
 {
-	WHITE = 1,
+	// level -1 samples
+	WHITE = 0,
+	PURPLE = 1,
+
+	// level-2 samples
 	RED   = 2,
 	ORANGE= 3,
 	YELLOW= 4

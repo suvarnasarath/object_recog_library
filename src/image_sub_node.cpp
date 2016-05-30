@@ -6,8 +6,6 @@
 #define MAX_DEPTH  100.0
 #define MIN_DEPTH    0.0
 
-//#define SIMULATOR
-
 cv_bridge::CvImagePtr cv_ptr;
 image_transport::Publisher pub;
 
@@ -17,11 +15,11 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
     std::vector<DETECTED_SAMPLE> detected_samples;
 	try {
 		  std::cout << "." << std::endl;
-		  cv_ptr = cv_bridge::toCvCopy(msg,"rgb8");
+		  cv_ptr = cv_bridge::toCvCopy(msg,"bgr8");
 		  cv::Mat * imagePtr = &(cv_ptr->image);
 		  cv::Mat *out_image = &(cv_ptr->image);
 		  find_objects(0,imagePtr,out_image,detected_samples);
-		  sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "rgb8", *out_image).toImageMsg();
+		  sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", *out_image).toImageMsg();
 		  pub.publish(msg);
 	  } catch (cv_bridge::Exception& e) {
 	    ROS_ERROR("Could not convert from '%s' to 'rgb8'.", msg->encoding.c_str());
@@ -31,7 +29,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 int main(int argc, char **argv)
 {
 	// Turn off debug messages.
-	set_debug(VERBOSE);
+	set_debug(OFF);
 
 	/*******************************/
 	/******** Register camera ******/
@@ -54,18 +52,20 @@ int main(int argc, char **argv)
 	/******** Register samples ******/
 	/********************************/
 
-	/*
-	 * White
-	 */
-	std::vector<double>L{200,55,0.6};			 				//{Origin,Deviation,Weight}
-	//std::vector<double>L{150,55,0.6};			 				//{Origin,Deviation,Weight}
-	std::vector<double>a{128,20,0.1};			 				//{Origin,Deviation,Weight}
-	std::vector<double>b{128,30,0.3};			 				//{Origin,Deviation,Weight}
+	std::vector<double>LWhite{200,55,0.6};			 				//{Origin,Deviation,Weight}
+	std::vector<double>aWhite{128,20,0.1};			 				//{Origin,Deviation,Weight}
+	std::vector<double>bWhite{128,30,0.3};			 				//{Origin,Deviation,Weight}
+	std::vector<double>widthWhite{0.0685,0.01, 0.06}; 	//{width,min,max}
+	std::vector<double>depthWhite{0.0635,0.01, 0.03}; 	//{height,min,max}
+	register_sample(WHITE,LWhite,aWhite,bWhite,widthWhite,depthWhite);
+
+
+	std::vector<double>L{128,50,0.1};			 				//{Origin,Deviation,Weight}
+	std::vector<double>a{150,15,0.6};			 				//{Origin,Deviation,Weight}
+	std::vector<double>b{150,15,0.3};					 				//{Origin,Deviation,Weight}
 	std::vector<double>width{0.0685,0.01, 0.06}; 	//{width,min,max}
 	std::vector<double>depth{0.0635,0.01, 0.03}; 	//{height,min,max}
-	register_sample(WHITE,L,a,b,width,depth);
-
-	// Todo: Add purple rock
+	register_sample(PURPLE,L,a,b,width,depth);
 
 
 	/********************************/
